@@ -1,4 +1,4 @@
-# Modelo de Despliegue de GRIDROBOT
+# Modelo de Despliegue de GRIDROBOT v1
 
 ## Introducción
 GRIDROBOT se despliega como una solución distribuida ligera sobre red local, con clientes web basados en navegador, un backend Node.js/Express con Socket.IO, una base de datos PostgreSQL y un broker MQTT. El repositorio incluye además un `docker-compose.yml` que permite levantar PostgreSQL, MQTT, backend y frontend como contenedores diferenciados.

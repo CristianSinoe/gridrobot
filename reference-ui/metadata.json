@@ -1,0 +1,5 @@
+{
+  "name": "GRIDROBOT Control Center",
+  "description": "Industrial robotics simulation and fleet management dashboard with real-time telemetry and task assignment.",
+  "requestFramePermissions": []
+}

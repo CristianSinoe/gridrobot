@@ -1,0 +1,105 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gridrobot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gridrobot}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-gridrobot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gridrobot
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: gridrobot-mqtt
+    restart: unless-stopped
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+      - "${MQTT_WS_PORT:-9001}:9001"
+    volumes:
+      - ./docker/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks:
+      - gridrobot
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: gridrobot-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    working_dir: /app/backend
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      PUBLIC_HOST_IP: ${PUBLIC_HOST_IP:-192.168.100.12}
+      FRONTEND_PORT: ${FRONTEND_PORT:-5173}
+      ALLOWED_ORIGINS: http://localhost:${FRONTEND_PORT:-5173},http://127.0.0.1:${FRONTEND_PORT:-5173},http://${PUBLIC_HOST_IP:-192.168.100.12}:${FRONTEND_PORT:-5173}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-gridrobot}?schema=public
+      MQTT_URL: mqtt://mqtt:1883
+      TICK_RATE_HZ: ${GRIDROBOT_TICK_RATE_HZ:-20}
+    command: >
+      sh -c "npm install &&
+      npx prisma db push --accept-data-loss --schema /app/database/prisma/schema.prisma &&
+      npx prisma generate --schema /app/database/prisma/schema.prisma &&
+      npm run dev"
+    ports:
+      - "${BACKEND_PORT:-4000}:4000"
+    volumes:
+      - ./backend:/app/backend
+      - ./database:/app/database
+      - ./packages:/app/packages
+      - backend_node_modules:/app/backend/node_modules
+    networks:
+      - gridrobot
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: gridrobot-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    working_dir: /app/frontend
+    environment:
+      VITE_BACKEND_PROTOCOL: http
+      VITE_BACKEND_PORT: ${BACKEND_PORT:-4000}
+    command: >
+      sh -c "npm install &&
+      npm run dev -- --host 0.0.0.0 --port 5173"
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend:/app/frontend
+      - frontend_node_modules:/app/frontend/node_modules
+    networks:
+      - gridrobot
+
+networks:
+  gridrobot:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mosquitto_data:
+  mosquitto_log:
+  backend_node_modules:
+  frontend_node_modules:

@@ -1,0 +1,326 @@
+@startuml Entidad-relacion
+hide methods
+hide stereotypes
+skinparam backgroundColor transparent
+skinparam linetype ortho
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam entity {
+  BackgroundColor #0f1716
+  BorderColor #5bd0c6
+  FontColor #e8f1ef
+}
+skinparam note {
+  BackgroundColor #15201f
+  BorderColor #5bd0c6
+  FontColor #e8f1ef
+}
+
+title GRIDROBOT - Diagrama Entidad-Relacion
+
+entity "Node" as Node {
+  * id : uuid <<PK>>
+  --
+  code : string <<UQ>>
+  name : string
+  role : NodeRole
+  status : NodeStatus
+  host : string?
+  ipAddress : string?
+  port : int?
+  lastHeartbeatAt : datetime?
+  createdAt : datetime
+  updatedAt : datetime
+}
+
+entity "Robot" as Robot {
+  * id : uuid <<PK>>
+  --
+  code : string <<UQ>>
+  nodeId : uuid? <<FK>>
+  currentMapId : uuid? <<FK>>
+  name : string?
+  status : RobotStatus
+  catalogStatus : string
+  isActive : boolean
+  x : int
+  y : int
+  heading : string?
+  physicalWeightKg : float?
+  speedCellsPerSec : float?
+  capacityValue : int?
+  capacityUnit : CapacityUnit?
+  supports : RobotSupportCapability[]
+  batteryLevel : decimal?
+  targetX : int?
+  targetY : int?
+  lastSeenAt : datetime?
+  createdAt : datetime
+  updatedAt : datetime
+}
+
+entity "Product" as Product {
+  * id : uuid <<PK>>
+  --
+  sku : string <<UQ>>
+  name : string
+  description : string?
+  status : ProductStatus
+  quantity : int
+  createdAt : datetime
+  updatedAt : datetime
+}
+
+entity "Task" as Task {
+  * id : uuid <<PK>>
+  --
+  code : string? <<UQ>>
+  robotId : uuid? <<FK>>
+  requestedMapId : uuid? <<FK>>
+  productId : uuid? <<FK>>
+  createdByNodeId : uuid? <<FK>>
+  name : string
+  description : string?
+  type : TaskDomainType
+  status : TaskStatus
+  priority : TaskPriority
+  executionStage : TaskExecutionStage
+  originX : int
+  originY : int
+  targetX : int
+  targetY : int
+  loadTypeRequired : RobotSupportCapability
+  requiresRefrigeration : boolean
+  requiresFragileHandling : boolean
+  requiredAmount : int
+  amountUnit : CapacityUnit
+  dueAt : datetime?
+  startedAt : datetime?
+  completedAt : datetime?
+  createdAt : datetime
+  updatedAt : datetime
+}
+
+entity "TaskAssignment" as TaskAssignment {
+  * id : uuid <<PK>>
+  --
+  taskId : uuid <<FK>>
+  robotId : uuid <<FK>>
+  assignedByNodeId : uuid? <<FK>>
+  acceptedAt : datetime?
+  startedAt : datetime?
+  completedAt : datetime?
+  createdAt : datetime
+  updatedAt : datetime
+  --
+  (taskId, robotId) <<UQ>>
+}
+
+entity "GridMap" as GridMap {
+  * id : uuid <<PK>>
+  --
+  code : string <<UQ>>
+  name : string
+  version : int
+  width : int
+  height : int
+  isActive : boolean
+  metadata : json?
+  createdAt : datetime
+  updatedAt : datetime
+}
+
+entity "GridCell" as GridCell {
+  * id : uuid <<PK>>
+  --
+  mapId : uuid <<FK>>
+  x : int
+  y : int
+  cellType : string
+  isBlocked : boolean
+  traversalCost : int
+  metadata : json?
+  createdAt : datetime
+  updatedAt : datetime
+  --
+  (mapId, x, y) <<UQ>>
+}
+
+entity "Obstacle" as Obstacle {
+  * id : uuid <<PK>>
+  --
+  mapId : uuid? <<FK>>
+  cellId : uuid? <<FK>>
+  type : ObstacleType
+  source : ObstacleSource
+  x : int
+  y : int
+  width : int
+  height : int
+  isActive : boolean
+  detectedAt : datetime
+  clearedAt : datetime?
+  metadata : json?
+  createdAt : datetime
+  updatedAt : datetime
+  --
+  (x, y) <<UQ>>
+}
+
+entity "Route" as Route {
+  * id : uuid <<PK>>
+  --
+  robotId : uuid <<FK>>
+  taskId : uuid? <<FK>>
+  mapId : uuid? <<FK>>
+  status : RouteStatus
+  version : int
+  startX : int
+  startY : int
+  goalX : int
+  goalY : int
+  estimatedCost : int?
+  startedAt : datetime?
+  completedAt : datetime?
+  invalidatedAt : datetime?
+  invalidationReason : string?
+  createdAt : datetime
+  updatedAt : datetime
+}
+
+entity "RouteStep" as RouteStep {
+  * id : uuid <<PK>>
+  --
+  routeId : uuid <<FK>>
+  cellId : uuid? <<FK>>
+  stepIndex : int
+  x : int
+  y : int
+  scheduledTick : int?
+  createdAt : datetime
+  updatedAt : datetime
+  --
+  (routeId, stepIndex) <<UQ>>
+}
+
+entity "SystemLog" as SystemLog {
+  * id : uuid <<PK>>
+  --
+  nodeId : uuid? <<FK>>
+  robotId : uuid? <<FK>>
+  taskId : uuid? <<FK>>
+  level : LogLevel
+  source : string
+  message : string
+  details : json?
+  createdAt : datetime
+  updatedAt : datetime
+}
+
+entity "Metric" as Metric {
+  * id : uuid <<PK>>
+  --
+  nodeId : uuid? <<FK>>
+  robotId : uuid? <<FK>>
+  name : string
+  type : MetricType
+  value : decimal
+  unit : string?
+  recordedAt : datetime
+  createdAt : datetime
+  updatedAt : datetime
+}
+
+Node ||--o{ Robot : asigna
+Node ||--o{ Task : crea
+Node ||--o{ TaskAssignment : registra
+Node ||--o{ SystemLog : genera
+Node ||--o{ Metric : reporta
+
+Robot ||--o{ Task : ejecuta
+Robot ||--o{ TaskAssignment : recibe
+Robot ||--o{ Route : sigue
+Robot ||--o{ SystemLog : produce
+Robot ||--o{ Metric : emite
+
+Product ||--o{ Task : abastece
+
+Task ||--o{ TaskAssignment : historial
+Task ||--o{ Route : define
+Task ||--o{ SystemLog : contexto
+
+GridMap ||--o{ GridCell : contiene
+GridMap ||--o{ Obstacle : ubica
+GridMap ||--o{ Route : soporta
+GridMap ||--o{ Robot : posiciona
+GridMap ||--o{ Task : solicita
+
+GridCell ||--o{ Obstacle : ocupa
+GridCell ||--o{ RouteStep : referencia
+
+Route ||--o{ RouteStep : compone
+
+TaskAssignment }o--|| Task : taskId
+TaskAssignment }o--|| Robot : robotId
+TaskAssignment }o--|| Node : assignedByNodeId
+
+Obstacle }o--|| GridMap : mapId
+Obstacle }o--|| GridCell : cellId
+
+Route }o--|| Robot : robotId
+Route }o--|| Task : taskId
+Route }o--|| GridMap : mapId
+
+RouteStep }o--|| Route : routeId
+RouteStep }o--|| GridCell : cellId
+
+SystemLog }o--|| Node : nodeId
+SystemLog }o--|| Robot : robotId
+SystemLog }o--|| Task : taskId
+
+Metric }o--|| Node : nodeId
+Metric }o--|| Robot : robotId
+
+note right of Node
+Enums principales:
+- NodeRole
+- NodeStatus
+end note
+
+note right of Robot
+Enums principales:
+- RobotStatus
+- CapacityUnit
+- RobotSupportCapability
+end note
+
+note right of Task
+Enums principales:
+- TaskStatus
+- TaskPriority
+- TaskDomainType
+- TaskExecutionStage
+end note
+
+note right of Obstacle
+Enums principales:
+- ObstacleType
+- ObstacleSource
+end note
+
+note right of Route
+Enum principal:
+- RouteStatus
+end note
+
+note right of SystemLog
+Enum principal:
+- LogLevel
+end note
+
+note right of Metric
+Enum principal:
+- MetricType
+end note
+
+@enduml

@@ -1,0 +1,425 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum NodeRole {
+  CENTRAL_SERVER
+  OPERATOR_CLIENT
+}
+
+enum NodeStatus {
+  ONLINE
+  OFFLINE
+  DEGRADED
+  MAINTENANCE
+}
+
+enum RobotStatus {
+  IDLE
+  MOVING
+  WAITING
+  BLOCKED
+  OFFLINE
+}
+
+enum CapacityUnit {
+  units
+  kg
+}
+
+enum RobotSupportCapability {
+  UNIT_LOAD
+  BULK_LOAD
+  NON_FRAGILE
+  FRAGILE
+  REFRIGERATED
+}
+
+enum TaskStatus {
+  PENDING
+  ASSIGNED
+  REASSIGNED
+  IN_PROGRESS
+  WAITING_ASSISTANCE
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum TaskDomainType {
+  MOVE_BOXES
+  MOVE_BOTTLES
+  MOVE_SAND
+  MOVE_GRAVEL
+  MOVE_LIQUID_BULK
+  MOVE_COLD_PRODUCTS
+  MOVE_FRAGILE_PRODUCTS
+}
+
+enum TaskExecutionStage {
+  TO_ORIGIN
+  TO_TARGET
+}
+
+enum ProductStatus {
+  AVAILABLE
+  RESERVED
+  IN_TRANSIT
+  DELIVERED
+  DAMAGED
+}
+
+enum ObstacleType {
+  STATIC
+  DYNAMIC
+  TEMPORARY
+}
+
+enum ObstacleSource {
+  MANUAL
+  SENSOR
+  SIMULATION
+  SYSTEM
+}
+
+enum RouteStatus {
+  PLANNED
+  ACTIVE
+  BLOCKED
+  COMPLETED
+  CANCELLED
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+  FATAL
+}
+
+enum MetricType {
+  COUNTER
+  GAUGE
+  HISTOGRAM
+  TIMER
+}
+
+model Node {
+  id              String           @id @default(uuid())
+  code            String           @unique
+  name            String
+  role            NodeRole
+  status          NodeStatus       @default(ONLINE)
+  host            String?
+  ipAddress       String?
+  port            Int?
+  lastHeartbeatAt DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  robots          Robot[]
+  createdTasks    Task[]           @relation("TaskCreatedByNode")
+  taskAssignments TaskAssignment[]
+  systemLogs      SystemLog[]
+  metrics         Metric[]
+
+  @@index([role, status])
+  @@index([lastHeartbeatAt])
+  @@map("nodes")
+}
+
+model Robot {
+  id              String           @id @default(uuid())
+  code            String           @unique
+  name            String?
+  status          RobotStatus      @default(IDLE)
+  catalogStatus   String           @default("inactivo")
+  isActive        Boolean          @default(false)
+  nodeId          String?
+  currentMapId    String?
+  x               Int
+  y               Int
+  heading         String?
+  physicalWeightKg Float?
+  speedCellsPerSec Float?
+  capacityValue   Int?
+  capacityUnit    CapacityUnit?
+  supports        RobotSupportCapability[]
+  batteryLevel    Decimal?         @db.Decimal(5, 2)
+  targetX         Int?
+  targetY         Int?
+  lastSeenAt      DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  node            Node?            @relation(fields: [nodeId], references: [id], onDelete: SetNull)
+  currentMap      GridMap?         @relation(fields: [currentMapId], references: [id], onDelete: SetNull)
+  tasks           Task[]
+  taskAssignments TaskAssignment[]
+  routes          Route[]
+  logs            SystemLog[]
+  metrics         Metric[]
+
+  @@index([nodeId])
+  @@index([currentMapId])
+  @@index([status, lastSeenAt])
+  @@index([isActive, catalogStatus])
+  @@index([currentMapId, x, y])
+  @@map("robots")
+}
+
+model Product {
+  id          String        @id @default(uuid())
+  sku         String        @unique
+  name        String
+  description String?
+  status      ProductStatus @default(AVAILABLE)
+  quantity    Int           @default(1)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  tasks       Task[]
+
+  @@index([status])
+  @@map("products")
+}
+
+model Task {
+  id              String           @id @default(uuid())
+  code            String?          @unique
+  name            String
+  description     String?
+  type            TaskDomainType   @default(MOVE_BOXES)
+  status          TaskStatus       @default(PENDING)
+  priority        TaskPriority     @default(NORMAL)
+  executionStage  TaskExecutionStage @default(TO_ORIGIN)
+  originX         Int              @default(0)
+  originY         Int              @default(0)
+  targetX         Int
+  targetY         Int
+  loadTypeRequired RobotSupportCapability @default(UNIT_LOAD)
+  requiresRefrigeration Boolean    @default(false)
+  requiresFragileHandling Boolean  @default(false)
+  requiredAmount  Int              @default(1)
+  amountUnit      CapacityUnit     @default(units)
+  robotId         String?
+  requestedMapId  String?
+  productId       String?
+  createdByNodeId String?
+  dueAt           DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  robot           Robot?           @relation(fields: [robotId], references: [id], onDelete: SetNull)
+  requestedMap    GridMap?         @relation(fields: [requestedMapId], references: [id], onDelete: SetNull)
+  product         Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  createdByNode   Node?            @relation("TaskCreatedByNode", fields: [createdByNodeId], references: [id], onDelete: SetNull)
+  assignments     TaskAssignment[]
+  routes          Route[]
+  logs            SystemLog[]
+
+  @@index([status, priority])
+  @@index([robotId, status])
+  @@index([type, status])
+  @@index([requestedMapId, targetX, targetY])
+  @@index([productId])
+  @@index([createdByNodeId])
+  @@index([dueAt])
+  @@map("tasks")
+}
+
+model TaskAssignment {
+  id               String    @id @default(uuid())
+  taskId           String
+  robotId          String
+  assignedByNodeId String?
+  acceptedAt       DateTime?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  task             Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  robot            Robot     @relation(fields: [robotId], references: [id], onDelete: Cascade)
+  assignedByNode   Node?     @relation(fields: [assignedByNodeId], references: [id], onDelete: SetNull)
+
+  @@unique([taskId, robotId])
+  @@index([taskId, createdAt])
+  @@index([robotId, createdAt])
+  @@index([assignedByNodeId])
+  @@map("task_assignments")
+}
+
+model GridMap {
+  id        String     @id @default(uuid())
+  code      String     @unique
+  name      String
+  version   Int        @default(1)
+  width     Int
+  height    Int
+  isActive  Boolean    @default(false)
+  metadata  Json?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  cells     GridCell[]
+  obstacles Obstacle[]
+  routes    Route[]
+  robots    Robot[]
+  tasks     Task[]
+
+  @@index([isActive])
+  @@index([name, version])
+  @@map("grid_maps")
+}
+
+model GridCell {
+  id            String      @id @default(uuid())
+  mapId         String
+  x             Int
+  y             Int
+  cellType      String
+  isBlocked     Boolean     @default(false)
+  traversalCost Int         @default(1)
+  metadata      Json?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  map           GridMap     @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  routeSteps    RouteStep[]
+  obstacles     Obstacle[]
+
+  @@unique([mapId, x, y])
+  @@index([mapId, isBlocked])
+  @@index([mapId, cellType])
+  @@map("grid_cells")
+}
+
+model Obstacle {
+  id         String          @id @default(uuid())
+  mapId      String?
+  cellId     String?
+  type       ObstacleType    @default(DYNAMIC)
+  source     ObstacleSource  @default(SIMULATION)
+  x          Int
+  y          Int
+  width      Int             @default(1)
+  height     Int             @default(1)
+  isActive   Boolean         @default(true)
+  detectedAt DateTime        @default(now())
+  clearedAt  DateTime?
+  metadata   Json?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  map        GridMap?        @relation(fields: [mapId], references: [id], onDelete: SetNull)
+  cell       GridCell?       @relation(fields: [cellId], references: [id], onDelete: SetNull)
+
+  @@unique([x, y])
+  @@index([mapId, isActive])
+  @@index([mapId, x, y])
+  @@index([cellId])
+  @@index([type, source])
+  @@map("obstacles")
+}
+
+model Route {
+  id                 String       @id @default(uuid())
+  robotId            String
+  taskId             String?
+  mapId              String?
+  status             RouteStatus  @default(PLANNED)
+  version            Int          @default(1)
+  startX             Int
+  startY             Int
+  goalX              Int
+  goalY              Int
+  estimatedCost      Int?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  invalidatedAt      DateTime?
+  invalidationReason String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  robot              Robot        @relation(fields: [robotId], references: [id], onDelete: Cascade)
+  task               Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  map                GridMap?     @relation(fields: [mapId], references: [id], onDelete: SetNull)
+  steps              RouteStep[]
+
+  @@index([robotId, status])
+  @@index([taskId])
+  @@index([mapId, status])
+  @@index([robotId, version])
+  @@map("routes")
+}
+
+model RouteStep {
+  id            String    @id @default(uuid())
+  routeId       String
+  cellId        String?
+  stepIndex     Int
+  x             Int
+  y             Int
+  scheduledTick Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  route         Route     @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  cell          GridCell? @relation(fields: [cellId], references: [id], onDelete: SetNull)
+
+  @@unique([routeId, stepIndex])
+  @@index([routeId, scheduledTick])
+  @@index([cellId])
+  @@index([x, y])
+  @@map("route_steps")
+}
+
+model SystemLog {
+  id        String    @id @default(uuid())
+  level     LogLevel  @default(INFO)
+  source    String
+  message   String
+  details   Json?
+  nodeId    String?
+  robotId   String?
+  taskId    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  node      Node?     @relation(fields: [nodeId], references: [id], onDelete: SetNull)
+  robot     Robot?    @relation(fields: [robotId], references: [id], onDelete: SetNull)
+  task      Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([level, createdAt])
+  @@index([source, createdAt])
+  @@index([nodeId])
+  @@index([robotId])
+  @@index([taskId])
+  @@map("system_logs")
+}
+
+model Metric {
+  id         String    @id @default(uuid())
+  name       String
+  type       MetricType
+  value      Decimal   @db.Decimal(18, 4)
+  unit       String?
+  nodeId     String?
+  robotId    String?
+  recordedAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  node       Node?     @relation(fields: [nodeId], references: [id], onDelete: SetNull)
+  robot      Robot?    @relation(fields: [robotId], references: [id], onDelete: SetNull)
+
+  @@index([name, recordedAt])
+  @@index([type, recordedAt])
+  @@index([nodeId, recordedAt])
+  @@index([robotId, recordedAt])
+  @@map("metrics")
+}

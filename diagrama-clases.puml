@@ -1,0 +1,295 @@
+@startuml
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+title GRIDROBOT - Diagrama de clases real del proyecto
+
+package "API / Controllers" {
+  class SessionController {
+    +status()
+    +loginCentral()
+    +loginOperator()
+    +logout()
+    +release()
+    -assertCentralRequest()
+  }
+
+  class RobotController {
+    +list()
+  }
+
+  class ObstacleController {
+    +list()
+    +upsert()
+    +remove()
+    -assertCentralSession()
+  }
+
+  class TaskController {
+    +list()
+    +create()
+    +assign()
+    +start()
+    +cancelPreparation()
+    -resolveSession()
+    -resolveCentralRobotId()
+  }
+
+  class "HealthController" as HealthController <<module>> {
+    +getHealth()
+  }
+}
+
+package "Core / Grid & Obstacles" {
+  class GridManager {
+    -width : number
+    -height : number
+    +getDimensions()
+    +isWithinBounds(position)
+    +key(position)
+    +equals(a, b)
+    +getNeighbors(position)
+  }
+
+  class ObstacleManager {
+    -obstacles : Map
+    +bootstrap()
+    +getAll()
+    +getAllStates()
+    +isBlocked(position)
+    +replace(obstacles)
+    +upsert(position, options)
+    +remove(position)
+    +moveDynamicObstacles(robotPositions, moveChance)
+    -publish()
+  }
+
+  class ObstacleGeneratorService {
+    -random : SeededRandom
+    +ensureInitialObstacles(count, blockedPositions)
+  }
+
+  class PathfindingService {
+    +findPath(start, goal)
+    -heuristic(a, b)
+    -reconstructPath(cameFrom, goal)
+  }
+}
+
+package "Core / Robots & Tasks" {
+  class RobotService {
+    -robots : Map
+    +bootstrap()
+    +getAll()
+    +getById(robotId)
+    +assignRoute(robotId, target, taskId, reason)
+    +tick()
+    +recalculateRoutesForObstacles()
+    +markFailure(robotId)
+    +setState(robot)
+    -persistStates(robots)
+    -persistRoute(robotId, taskId, path, invalidationReason)
+    -resolveTaskTarget(robot, task)
+  }
+
+  class TaskCompatibilityService {
+    +isRobotCompatible(robot, task)
+  }
+
+  class TaskGeneratorService {
+    -random : SeededRandom
+    +createCompatibleTaskForRobot(robot, blockedPositions)
+    -pickTaskTypeForRobot(robot)
+    -buildTaskName(type, origin, target)
+    -pickFreePosition(blocked)
+  }
+
+  class TaskService {
+    -compatibilityService : TaskCompatibilityService
+    -taskGeneratorService : TaskGeneratorService
+    -lastFailureTickByRobot : Map
+    +list(robotId)
+    +create(input)
+    +assign(taskId, robotId, assignedByNodeCode)
+    +start(taskId, robotId)
+    +cancelPreparation(taskId, nodeCode)
+    +handleRobotProgress()
+    +ensureAutomaticTasks()
+    +simulateRandomFailures(currentTick, chancePerTick, minTicksBetweenEvents)
+    -interruptForRobotFailure(robotId)
+    -toTaskView(task)
+    -rankRobotsForTask(task)
+    -listReservedRobotTasks(excludedTaskId)
+    -findRobotReservation(robotId, excludedTaskId)
+    -getRobotReservationLabel(task)
+    -getRobotReservationMessage(robotCode, task)
+  }
+
+  class PreviewRouteService {
+    -previewsByTaskId : Map
+    +getAll()
+    +getForNode(nodeId)
+    +clearByTask(taskId)
+    +clearByNode(nodeId)
+    +upsertPreview(taskId, robotId, nodeId)
+    +recalculateAll()
+    -buildPreview(taskId, robotId, nodeId)
+    -mergePaths(firstLeg, secondLeg)
+  }
+
+  class WorldVisibilityService {
+    -discoveredByRobot : Map
+    -officiallyDiscovered : Set
+    +bootstrap()
+    +refreshDiscoveries()
+    +getVisibleObstaclesForRobot(robotId)
+    +getOfficiallyDiscoveredObstacles()
+    +handleObstacleRemoved(position)
+    +handleObstacleMoved(from, to)
+    -ensureRobotDiscoveries(robotId)
+    -getFovCells(center)
+  }
+}
+
+package "Core / Runtime & Access" {
+  class SessionAccessService {
+    -sessions : Map
+    -sessionByToken : Map
+    +loginCentral(password, clientIp)
+    +loginOperator(nodeId, clientIp)
+    +attachSocket(token, socketId, clientIp)
+    +getSessionByToken(token)
+    +releaseByToken(token)
+    +releaseBySocket(socketId)
+    +releaseByLock(role, nodeId)
+    +getStatus()
+    -reserveSession(role, nodeId, clientIp)
+    -destroySession(lockKey)
+    -pruneExpiredReservations()
+    -toLockKey(role, nodeId)
+  }
+
+  class SchedulerService {
+    -timer : Timeout
+    -tick : number
+    -isRunningTick : boolean
+    +start()
+    +stop()
+    -runTick()
+  }
+
+  class DevelopmentBootstrapService {
+    -obstacleGeneratorService : ObstacleGeneratorService
+    -taskGeneratorService : TaskGeneratorService
+    +bootstrap()
+    -ensureNodes()
+    -ensureGridMap()
+    -ensureGridCells(mapId)
+    -ensureRobotCatalog(nodes)
+    -ensureInitialTasks(robots, blockedPositions)
+  }
+}
+
+package "WebSocket / Gateway" {
+  class "SocketGateway" as SocketGateway <<module>> {
+    +getFocusedRobotIdForSocket(socketId)
+    +getViewerContext(dependencies, session, focusedRobotId)
+    +buildWorldPayload(dependencies, viewer, tick, includeTasks)
+    +emitTasksToAllViewers(io, dependencies)
+    +emitObstaclesToAllViewers(io, dependencies)
+    +emitPreviewRoutesToAllViewers(io, dependencies)
+    +createSocketGateway(httpServer, dependencies)
+  }
+}
+
+' -----------------------
+' API dependencies
+' -----------------------
+SessionController --> SessionAccessService
+RobotController --> RobotService
+ObstacleController --> ObstacleManager
+ObstacleController --> RobotService
+ObstacleController --> WorldVisibilityService
+ObstacleController --> SessionAccessService
+TaskController --> TaskService
+TaskController --> SessionAccessService
+TaskController --> RobotService
+TaskController --> PreviewRouteService
+
+' -----------------------
+' Core dependencies
+' -----------------------
+PathfindingService --> GridManager
+PathfindingService --> ObstacleManager
+
+ObstacleManager --> GridManager
+ObstacleGeneratorService --> GridManager
+
+RobotService --> PathfindingService
+
+TaskService --> RobotService
+TaskService --> GridManager
+TaskService --> ObstacleManager
+TaskService *-- TaskCompatibilityService
+TaskService *-- TaskGeneratorService
+
+PreviewRouteService --> RobotService
+PreviewRouteService --> PathfindingService
+
+WorldVisibilityService --> GridManager
+WorldVisibilityService --> ObstacleManager
+WorldVisibilityService --> RobotService
+
+SchedulerService --> SessionAccessService
+SchedulerService --> RobotService
+SchedulerService --> GridManager
+SchedulerService --> ObstacleManager
+SchedulerService --> TaskService
+SchedulerService --> WorldVisibilityService
+SchedulerService --> PreviewRouteService
+SchedulerService --> SocketGateway
+
+DevelopmentBootstrapService --> GridManager
+DevelopmentBootstrapService *-- ObstacleGeneratorService
+DevelopmentBootstrapService *-- TaskGeneratorService
+
+' -----------------------
+' Gateway dependencies
+' -----------------------
+SocketGateway --> SessionAccessService
+SocketGateway --> RobotService
+SocketGateway --> ObstacleManager
+SocketGateway --> GridManager
+SocketGateway --> TaskService
+SocketGateway --> WorldVisibilityService
+SocketGateway --> PreviewRouteService
+
+note right of TaskService
+  Servicio de dominio principal.
+  Coordina asignación, inicio,
+  cancelación, ranking y fallas.
+end note
+
+note right of SchedulerService
+  Orquesta el ciclo autoritativo:
+  tick de robots, progreso de tareas,
+  obstáculos dinámicos, fallas,
+  visibilidad y emisiones socket.
+end note
+
+note right of SocketGateway
+  No es una clase OO tradicional:
+  es un módulo con funciones
+  exportadas para Socket.IO.
+end note
+
+note right of DevelopmentBootstrapService
+  Prepara entorno local:
+  nodos, mapa, celdas, robots,
+  tareas iniciales y obstáculos.
+end note
+
+@enduml

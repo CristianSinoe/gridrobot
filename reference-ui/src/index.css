@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-brand-bg: #fbf9f4;
+  --color-brand-primary: #004f45;
+  --color-brand-primary-container: #00695c;
+  --color-brand-secondary: #47645e;
+  --color-brand-tertiary: #703321;
+  --color-brand-surface: #f0eee9;
+  --color-brand-surface-low: #f5f3ee;
+  --color-brand-surface-lowest: #ffffff;
+  --color-brand-error: #ba1a1a;
+  --color-brand-outline: #6e7976;
+  --color-brand-outline-variant: #bec9c5;
+
+  --shadow-brand-soft: 0 12px 40px rgba(0, 79, 69, 0.06);
+}
+
+.dark {
+  --color-brand-bg: #0a1412;
+  --color-brand-primary: #80cbc4;
+  --color-brand-primary-container: #004d40;
+  --color-brand-secondary: #b2dfdb;
+  --color-brand-tertiary: #ffab91;
+  --color-brand-surface: #121f1d;
+  --color-brand-surface-low: #1a2b28;
+  --color-brand-surface-lowest: #050a09;
+  --color-brand-error: #ffb4ab;
+  --color-brand-outline: #889390;
+  --color-brand-outline-variant: #3f4946;
+  --shadow-brand-soft: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+@layer base {
+  body {
+    @apply bg-brand-bg text-stone-900 font-sans antialiased transition-colors duration-300;
+  }
+  .dark body {
+    @apply text-stone-100;
+  }
+}
+
+.grid-pattern {
+  background-image: radial-gradient(circle, var(--color-brand-outline-variant) 1px, transparent 1px);
+  background-size: 24px 24px;
+}

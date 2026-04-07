@@ -152,6 +152,7 @@ export const CentralDashboard = ({
                 <span className="legend-item legend-item--stacked"><span className="legend-swatch legend-swatch--robot" />Robot</span>
                 <span className="legend-item legend-item--stacked"><span className="legend-swatch legend-swatch--route" />Ruta</span>
                 <span className="legend-item legend-item--stacked"><span className="legend-swatch legend-swatch--obstacle" />Obstáculo visible</span>
+                <span className="legend-item legend-item--stacked"><span className="legend-swatch legend-swatch--conflict" />Cruce previo</span>
                 <span className="legend-item legend-item--stacked"><span className="legend-swatch legend-swatch--origin" />Inicio</span>
                 <span className="legend-item legend-item--stacked"><span className="legend-swatch legend-swatch--target" />Destino</span>
               </div>

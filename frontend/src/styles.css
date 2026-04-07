@@ -1067,9 +1067,29 @@ button {
   box-shadow: 0 0 10px rgba(136, 216, 210, 0.16);
 }
 
+.overlay-route-conflict {
+  position: absolute;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at center, rgba(255, 232, 130, 0.88) 0%, rgba(255, 183, 77, 0.72) 45%, rgba(255, 111, 0, 0.34) 100%);
+  border: 2px solid rgba(255, 132, 32, 0.95);
+  box-shadow:
+    0 0 0 2px rgba(255, 241, 199, 0.26),
+    0 0 16px rgba(255, 142, 51, 0.48),
+    inset 0 0 14px rgba(255, 245, 199, 0.24);
+  animation: preview-conflict-pulse 0.95s ease-in-out infinite;
+  pointer-events: none;
+}
+
 .overlay-route--preview {
   border-style: dashed;
   animation: preview-pulse 1.05s ease-in-out infinite;
+}
+
+.overlay-route--preview-foreign {
+  opacity: 0.42;
+  border-style: dotted;
+  filter: saturate(0.72) brightness(1.08);
 }
 
 .overlay-route--invalid {
@@ -1124,6 +1144,12 @@ button {
 .legend-swatch--obstacle {
   background: rgba(241, 154, 139, 0.22);
   border: 1px dashed rgba(241, 154, 139, 0.72);
+}
+
+.legend-swatch--conflict {
+  background: rgba(255, 183, 77, 0.45);
+  border: 2px solid rgba(255, 132, 32, 0.88);
+  box-shadow: 0 0 10px rgba(255, 142, 51, 0.28);
 }
 
 .legend-swatch--origin {
@@ -1472,6 +1498,16 @@ button {
   box-shadow: 0 0 10px rgba(19, 124, 112, 0.12);
 }
 
+:root[data-theme="light"] .overlay-route-conflict {
+  background:
+    radial-gradient(circle at center, rgba(255, 214, 102, 0.95) 0%, rgba(255, 165, 58, 0.78) 45%, rgba(214, 95, 32, 0.26) 100%);
+  border-color: rgba(214, 95, 32, 0.92);
+  box-shadow:
+    0 0 0 2px rgba(255, 242, 199, 0.28),
+    0 0 16px rgba(214, 95, 32, 0.28),
+    inset 0 0 12px rgba(255, 247, 214, 0.22);
+}
+
 :root[data-theme="light"] .overlay-obstacle {
   background: transparent;
   border-color: rgba(185, 91, 74, 0.28);
@@ -1497,6 +1533,19 @@ button {
   100% {
     opacity: 0.36;
     transform: scale(0.96);
+  }
+}
+
+@keyframes preview-conflict-pulse {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.84;
+  }
+
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
   }
 }
 

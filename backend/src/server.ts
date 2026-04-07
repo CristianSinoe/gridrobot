@@ -55,7 +55,8 @@ const bootstrap = async (): Promise<void> => {
       obstacleManager,
       robotService,
       worldVisibilityService,
-      sessionAccessService
+      sessionAccessService,
+      previewRouteService
     )
   });
 

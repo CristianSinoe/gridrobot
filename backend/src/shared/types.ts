@@ -90,6 +90,9 @@ export interface PreviewRouteView {
   origin: GridPosition;
   target: GridPosition;
   path: GridPosition[];
+  conflictCells: GridPosition[];
+  conflictRobotIds: string[];
+  conflictNodeIds: string[];
   status: "READY" | "INVALID";
   message: string | null;
   updatedAt: string;

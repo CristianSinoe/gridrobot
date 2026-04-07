@@ -15,6 +15,7 @@ interface GridMapProps {
   selectedRobotId: string | null;
   highlightedTask?: Task | null;
   mode: "central" | "operator";
+  viewerNodeId?: string | null;
   onCellClick?: (position: GridPosition) => void;
   title?: string;
   subtitle?: string;
@@ -31,6 +32,7 @@ export const GridMap = ({
   selectedRobotId,
   highlightedTask = null,
   mode,
+  viewerNodeId = null,
   onCellClick,
   title = "Mundo de Cuadricula",
   subtitle,
@@ -95,6 +97,7 @@ export const GridMap = ({
               <span className="legend-item"><span className="legend-swatch legend-swatch--robot" />Robot</span>
               <span className="legend-item"><span className="legend-swatch legend-swatch--route" />Ruta</span>
               <span className="legend-item"><span className="legend-swatch legend-swatch--obstacle" />Obstaculo visible</span>
+              <span className="legend-item"><span className="legend-swatch legend-swatch--conflict" />Cruce previo</span>
               <span className="legend-item"><span className="legend-swatch legend-swatch--origin" />Inicio</span>
               <span className="legend-item"><span className="legend-swatch legend-swatch--target" />Destino</span>
             </>
@@ -123,6 +126,8 @@ export const GridMap = ({
             width={width}
             height={height}
             selectedRobotId={selectedRobotId}
+            mode={mode}
+            viewerNodeId={viewerNodeId}
           />
           <ObstacleLayer obstacles={obstacles} width={width} height={height} />
         </div>

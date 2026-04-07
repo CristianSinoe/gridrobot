@@ -21,8 +21,41 @@ export class PreviewRouteService {
     return this.getAll().filter((preview) => preview.nodeId === nodeId);
   }
 
+  public getForOperator(nodeId: string, focusedRobotId: string | null): PreviewRouteView[] {
+    const previews = this.getAll();
+    const ownPreview =
+      previews.find((preview) => preview.nodeId === nodeId && (!focusedRobotId || preview.robotId === focusedRobotId)) ??
+      previews.find((preview) => preview.nodeId === nodeId) ??
+      null;
+
+    if (!ownPreview) {
+      return [];
+    }
+
+    const visiblePreviews = new Map<string, PreviewRouteView>();
+    visiblePreviews.set(ownPreview.taskId, ownPreview);
+
+    ownPreview.conflictRobotIds.forEach((robotId) => {
+      if (robotId === ownPreview.robotId) {
+        return;
+      }
+
+      const relatedPreview = previews.find((preview) => preview.robotId === robotId);
+      if (relatedPreview) {
+        visiblePreviews.set(relatedPreview.taskId, relatedPreview);
+      }
+    });
+
+    return Array.from(visiblePreviews.values());
+  }
+
   public clearByTask(taskId: string): boolean {
-    return this.previewsByTaskId.delete(taskId);
+    const changed = this.previewsByTaskId.delete(taskId);
+    if (changed) {
+      this.rebuildConflictMetadata();
+    }
+
+    return changed;
   }
 
   public clearByNode(nodeId: string | null): boolean {
@@ -35,6 +68,10 @@ export class PreviewRouteService {
       }
     }
 
+    if (changed) {
+      this.rebuildConflictMetadata();
+    }
+
     return changed;
   }
 
@@ -43,7 +80,8 @@ export class PreviewRouteService {
 
     const preview = await this.buildPreview(taskId, robotId, nodeId);
     this.previewsByTaskId.set(taskId, preview);
-    return preview;
+    this.rebuildConflictMetadata();
+    return this.previewsByTaskId.get(taskId) ?? preview;
   }
 
   public async recalculateAll(): Promise<PreviewRouteView[]> {
@@ -56,7 +94,9 @@ export class PreviewRouteService {
       this.previewsByTaskId.set(preview.taskId, preview);
     });
 
-    return nextEntries;
+    this.rebuildConflictMetadata();
+
+    return this.getAll();
   }
 
   private async buildPreview(
@@ -76,6 +116,9 @@ export class PreviewRouteService {
       origin: task ? { x: task.originX, y: task.originY } : robot.position,
       target: task ? { x: task.targetX, y: task.targetY } : robot.position,
       path: [robot.position],
+      conflictCells: [],
+      conflictRobotIds: [],
+      conflictNodeIds: [],
       status: "INVALID" as const,
       message: "La ruta previa ya no es valida en el estado actual del mundo.",
       updatedAt: new Date().toISOString()
@@ -100,6 +143,9 @@ export class PreviewRouteService {
         origin,
         target,
         path,
+        conflictCells: [],
+        conflictRobotIds: [],
+        conflictNodeIds: [],
         status: "READY",
         message: null,
         updatedAt: new Date().toISOString()
@@ -128,5 +174,75 @@ export class PreviewRouteService {
 
     const [, ...remainingSecondLeg] = secondLeg;
     return [...firstLeg, ...remainingSecondLeg];
+  }
+
+  private rebuildConflictMetadata(): void {
+    const previews = Array.from(this.previewsByTaskId.values());
+    const cellParticipants = new Map<
+      string,
+      Array<{ taskId: string; robotId: string; nodeId: string | null; cell: GridPosition }>
+    >();
+
+    previews.forEach((preview) => {
+      if (preview.status !== "READY") {
+        return;
+      }
+
+      const visitedCells = new Set<string>();
+      preview.path.forEach((cell) => {
+        const key = `${cell.x}:${cell.y}`;
+        if (visitedCells.has(key)) {
+          return;
+        }
+
+        visitedCells.add(key);
+        const participants = cellParticipants.get(key) ?? [];
+        participants.push({
+          taskId: preview.taskId,
+          robotId: preview.robotId,
+          nodeId: preview.nodeId,
+          cell
+        });
+        cellParticipants.set(key, participants);
+      });
+    });
+
+    previews.forEach((preview) => {
+      const conflictCells = new Map<string, GridPosition>();
+      const conflictRobotIds = new Set<string>();
+      const conflictNodeIds = new Set<string>();
+
+      if (preview.status === "READY") {
+        const visitedCells = new Set<string>();
+        preview.path.forEach((cell) => {
+          const key = `${cell.x}:${cell.y}`;
+          if (visitedCells.has(key)) {
+            return;
+          }
+
+          visitedCells.add(key);
+          const participants = cellParticipants.get(key) ?? [];
+          const otherParticipants = participants.filter((participant) => participant.taskId !== preview.taskId);
+          if (otherParticipants.length === 0) {
+            return;
+          }
+
+          conflictCells.set(key, cell);
+          participants.forEach((participant) => {
+            conflictRobotIds.add(participant.robotId);
+            if (participant.nodeId) {
+              conflictNodeIds.add(participant.nodeId);
+            }
+          });
+        });
+      }
+
+      this.previewsByTaskId.set(preview.taskId, {
+        ...preview,
+        conflictCells: Array.from(conflictCells.values()),
+        conflictRobotIds: Array.from(conflictRobotIds),
+        conflictNodeIds: Array.from(conflictNodeIds)
+      });
+    });
   }
 }

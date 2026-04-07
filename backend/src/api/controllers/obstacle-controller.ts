@@ -4,6 +4,7 @@ import { z } from "zod";
 import { badRequest } from "../../shared/errors.js";
 import type { SessionAccessService } from "../../modules/central-access/session-access-service.js";
 import type { ObstacleManager } from "../../modules/obstacles/obstacle-manager.js";
+import type { PreviewRouteService } from "../../modules/preview-routes/preview-route-service.js";
 import type { RobotService } from "../../modules/robots/robot-service.js";
 import type { WorldVisibilityService } from "../../modules/world-visibility/world-visibility-service.js";
 
@@ -17,7 +18,8 @@ export class ObstacleController {
     private readonly obstacleManager: ObstacleManager,
     private readonly robotService: RobotService,
     private readonly worldVisibilityService: WorldVisibilityService,
-    private readonly sessionAccessService: SessionAccessService
+    private readonly sessionAccessService: SessionAccessService,
+    private readonly previewRouteService: PreviewRouteService
   ) {}
 
   public list = (_request: Request, response: Response): void => {
@@ -29,6 +31,7 @@ export class ObstacleController {
     const payload = obstacleSchema.parse(request.body);
     const obstacles = await this.obstacleManager.upsert(payload);
     const changedRobots = await this.robotService.recalculateRoutesForObstacles();
+    await this.previewRouteService.recalculateAll();
     this.worldVisibilityService.refreshDiscoveries();
 
     response.status(201).json({
@@ -42,6 +45,7 @@ export class ObstacleController {
     const payload = obstacleSchema.parse(request.body);
     const obstacles = await this.obstacleManager.remove(payload);
     const changedRobots = await this.robotService.recalculateRoutesForObstacles();
+    await this.previewRouteService.recalculateAll();
     this.worldVisibilityService.handleObstacleRemoved(payload);
 
     response.json({

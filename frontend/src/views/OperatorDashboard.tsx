@@ -5,11 +5,13 @@ import { SystemInstructions } from "../components/SystemInstructions";
 import { TaskPanel } from "../components/TaskPanel";
 import type { GridPosition, LogEntry, PreviewRoute, RobotState, Task } from "../types";
 import { connectionStateText, robotStatusText } from "../lib/ui-text";
+import type { OperatorNodeCode } from "../types";
 
 type SidebarSection = "dashboard" | "fleet" | "tasks" | "settings";
 
 interface OperatorDashboardProps {
   activeSection: SidebarSection;
+  operatorNodeId: OperatorNodeCode | null;
   width: number;
   height: number;
   tick: number;
@@ -31,6 +33,7 @@ interface OperatorDashboardProps {
 
 export const OperatorDashboard = ({
   activeSection,
+  operatorNodeId,
   width,
   height,
   tick,
@@ -127,6 +130,7 @@ export const OperatorDashboard = ({
             selectedRobotId={selectedRobotId}
             highlightedTask={highlightedTask}
             mode="operator"
+            viewerNodeId={operatorNodeId}
             title="Mundo de Cuadrícula"
             subtitle={`${width} x ${height} scale`}
             showLegendToolbar={false}
@@ -139,6 +143,7 @@ export const OperatorDashboard = ({
               <div className="utility-list">
                 <span className="legend-item legend-item--stacked"><span className="legend-swatch legend-swatch--robot" />Robot</span>
                 <span className="legend-item legend-item--stacked"><span className="legend-swatch legend-swatch--route" />Ruta</span>
+                <span className="legend-item legend-item--stacked"><span className="legend-swatch legend-swatch--conflict" />Cruce previo</span>
                 <span className="legend-item legend-item--stacked"><span className="legend-swatch legend-swatch--origin" />Inicio</span>
                 <span className="legend-item legend-item--stacked"><span className="legend-swatch legend-swatch--target" />Destino</span>
               </div>

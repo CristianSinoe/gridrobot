@@ -417,6 +417,7 @@ const App = () => {
           ) : (
             <OperatorDashboard
               activeSection={activeSection}
+              operatorNodeId={operatorNodeId}
               width={width}
               height={height}
               tick={tick}

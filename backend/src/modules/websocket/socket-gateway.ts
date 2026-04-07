@@ -84,7 +84,7 @@ export const buildWorldPayload = async (
     height,
     robots,
     obstacles,
-    previewRoutes: dependencies.previewRouteService.getForNode(viewer.nodeId),
+    previewRoutes: dependencies.previewRouteService.getForOperator(viewer.nodeId, viewer.robotId),
     ...(includeTasks ? { tasks: await dependencies.taskService.list() } : {})
   };
 
@@ -152,7 +152,10 @@ export const emitPreviewRoutesToAllViewers = async (
     const previewRoutes =
       session.role === "central"
         ? dependencies.previewRouteService.getAll()
-        : dependencies.previewRouteService.getForNode(session.nodeId);
+        : dependencies.previewRouteService.getForOperator(
+            session.nodeId as OperatorNodeCode,
+            operatorFocusBySocket.get(socket.id) ?? null
+          );
     socket.emit("preview:list", previewRoutes);
   }
 };

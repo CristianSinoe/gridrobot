@@ -28,8 +28,10 @@ Thumbs.db
 
 .idea/
 .vscode/
+.codex
 
 .vercel/
 .netlify/
 
 *.tsbuildinfo
+Análisis Técnico Proyecto GRIDROBOT.pdf

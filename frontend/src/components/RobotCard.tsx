@@ -6,15 +6,18 @@ interface RobotCardProps {
   robot: RobotState;
   selected: boolean;
   onSelect: (robotId: string) => void;
+  className?: string;
 }
 
-export const RobotCard = ({ robot, selected, onSelect }: RobotCardProps) => {
+export const RobotCard = ({ robot, selected, onSelect, className = "" }: RobotCardProps) => {
   const palette = getOperatorPalette(robot.assignedNodeCode);
 
   return (
     <button
       type="button"
-      className={`robot-card${selected ? " is-selected" : ""}`}
+      className={`robot-card${selected ? " is-selected" : ""}${className ? ` ${className}` : ""}`}
+      aria-pressed={selected}
+      aria-label={`Seleccionar robot ${robot.name}`}
       onClick={() => onSelect(robot.id)}
       style={{
         borderColor: selected ? palette.border : undefined,
@@ -29,8 +32,8 @@ export const RobotCard = ({ robot, selected, onSelect }: RobotCardProps) => {
       </div>
       <div className="robot-card__title">
         <div>
-          <p className="eyebrow">Unidad robotica</p>
-          <h3>{robot.name}</h3>
+          <p className="eyebrow">Unidad robótica</p>
+          <h3 className="truncate-text">{robot.name}</h3>
         </div>
       </div>
       <div className="robot-card__meta">
@@ -41,10 +44,10 @@ export const RobotCard = ({ robot, selected, onSelect }: RobotCardProps) => {
       <div className="detail-grid">
         <p>
           <span>Disponibilidad</span>
-          <strong>{robot.catalogStatus}</strong>
+          <strong className="break-text">{robot.catalogStatus}</strong>
         </p>
         <p>
-          <span>Posicion</span>
+          <span>Posición</span>
           <strong>{formatPosition(robot.position.x, robot.position.y)}</strong>
         </p>
         <p>

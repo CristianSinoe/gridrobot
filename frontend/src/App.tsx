@@ -5,25 +5,39 @@ import { AppSidebar } from "./components/AppSidebar";
 import { AccessSelectionScreen } from "./components/AccessSelectionScreen";
 import { CentralAccessPanel } from "./components/CentralAccessPanel";
 import { OperatorAccessPanel } from "./components/OperatorAccessPanel";
+import { AdminGameView } from "./views/AdminGameView";
 import { CentralDashboard } from "./views/CentralDashboard";
 import { OperatorDashboard } from "./views/OperatorDashboard";
+import { GAME_ONLY_REDIRECT } from "./config";
 import { useGridRobotState } from "./hooks/useGridRobotState";
 import { api } from "./lib/api";
+import { socket } from "./lib/socket";
 import type {
   AccessRole,
   AccessSessionRecord,
   ActiveSessionView,
+  GameStateSnapshot,
   GridPosition,
+  Operator,
   OperatorNodeCode,
+  RobotAdminInput,
+  RobotState,
+  OperatorAdminInput,
+  SystemMode,
   ViewMode
 } from "./types";
 
 const ACCESS_ROLE_STORAGE_KEY = "gridrobot.access-role";
 const OPERATOR_NODE_STORAGE_KEY = "gridrobot.operator-node";
 const THEME_STORAGE_KEY = "gridrobot.theme";
-type SidebarSection = "dashboard" | "fleet" | "tasks" | "settings";
+const GAME_ACCESS_FLASH_STORAGE_KEY = "gridrobot.game-access-flash";
+type SidebarSection = "dashboard" | "fleet" | "tasks" | "robots" | "operators" | "settings";
 
-const App = () => {
+interface AppProps {
+  currentPath: string;
+}
+
+const App = ({ currentPath }: AppProps) => {
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
     return stored === "light" ? "light" : "dark";
@@ -39,9 +53,12 @@ const App = () => {
   const [session, setSession] = useState<AccessSessionRecord>({
     role: accessRole ?? "central",
     nodeId: operatorNodeId,
+    operatorId: null,
+    operatorUsername: null,
     token: null
   });
   const [selectedRobotId, setSelectedRobotId] = useState<string | null>(null);
+  const [selectedGridCell, setSelectedGridCell] = useState<GridPosition | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [centralAccessError, setCentralAccessError] = useState<string | null>(null);
   const [operatorAccessError, setOperatorAccessError] = useState<string | null>(null);
@@ -49,10 +66,34 @@ const App = () => {
   const [isAuthenticatingCentral, setIsAuthenticatingCentral] = useState(false);
   const [isAuthenticatingOperator, setIsAuthenticatingOperator] = useState(false);
   const [activeSessions, setActiveSessions] = useState<ActiveSessionView[]>([]);
-  const [shouldRestoreOperatorSession, setShouldRestoreOperatorSession] = useState(
-    accessRole === "operator" && operatorNodeId !== null
-  );
+  const [operators, setOperators] = useState<Operator[]>([]);
+  const [systemMode, setSystemMode] = useState<SystemMode>("WAREHOUSE");
+  const [gameState, setGameState] = useState<GameStateSnapshot | null>(null);
+  const [hasLoadedSystemMode, setHasLoadedSystemMode] = useState(false);
   const [activeSection, setActiveSection] = useState<SidebarSection>("dashboard");
+  const isCentralSessionActive = accessRole === "central" && session.token !== null;
+  const isAdminPath = currentPath === "/admin";
+  const isAdminGameViewPath = currentPath === "/admin/game-view";
+  const isAdminAreaPath = isAdminPath || isAdminGameViewPath;
+  const isRootPath = currentPath === "/";
+  const isKnownAppPath = isRootPath || isAdminAreaPath;
+
+  const navigateTo = useCallback((path: string, options?: { replace?: boolean; flashMessage?: string }) => {
+    if (window.location.pathname === path) {
+      return;
+    }
+
+    if (options?.flashMessage) {
+      window.sessionStorage.setItem(GAME_ACCESS_FLASH_STORAGE_KEY, options.flashMessage);
+    }
+
+    if (options?.replace === false) {
+      window.history.pushState(null, "", path);
+    } else {
+      window.history.replaceState(null, "", path);
+    }
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, []);
 
   const viewMode: ViewMode = accessRole === "operator" ? "operator" : "central";
   const sessionLabel =
@@ -61,8 +102,10 @@ const App = () => {
         ? "Panel Central"
         : "Acceso central"
       : accessRole === "operator"
-        ? operatorNodeId
-          ? `Operador ${operatorNodeId}`
+        ? session.operatorUsername
+          ? `${session.operatorUsername} · ${operatorNodeId ?? "Sin nodo"}`
+          : operatorNodeId
+            ? `Operador ${operatorNodeId}`
           : "Operador secundario"
         : null;
 
@@ -75,7 +118,7 @@ const App = () => {
 
   const headerSubtitle =
     accessRole === "central"
-      ? "Supervision completa de flota, rutas y sesiones activas."
+      ? "Supervisión completa de flota, rutas y sesiones activas."
       : accessRole === "operator"
         ? "Seleccione una tarea, elija un robot compatible y prepare el viaje."
         : "Seleccione el modo de acceso para continuar.";
@@ -83,11 +126,11 @@ const App = () => {
   const handleSessionInvalid = useCallback(() => {
     setSession((current) => ({ ...current, token: null }));
     if (accessRole === "central") {
-      setCentralAccessError("La sesion central ya no es valida. Vuelva a ingresar.");
+      setCentralAccessError("La sesión central ya no es válida. Vuelva a ingresar.");
       return;
     }
 
-    setOperatorAccessError("La sesion del nodo secundario ya no es valida. Ingrese de nuevo.");
+    setOperatorAccessError("La sesión del nodo secundario ya no es válida. Ingrese de nuevo.");
   }, [accessRole]);
 
   const {
@@ -100,16 +143,38 @@ const App = () => {
     previewRoutes,
     robots,
     connectionState,
+    mqttConnectionState,
+    historyEvents,
+    networkEvents,
     assignTask,
     startTask,
     cancelTaskPreparation,
-    addObstacle,
-    removeObstacle
+    refreshHistoryEvents
   } = useGridRobotState(viewMode, selectedRobotId, session.token, handleSessionInvalid);
 
   const activeRobotId = useMemo(() => {
     return selectedRobotId;
   }, [selectedRobotId]);
+
+  const operatorPreparedTask = useMemo(() => {
+    if (viewMode !== "operator" || !session.operatorId) {
+      return session.nodeId
+        ? tasks.find(
+            (task) =>
+              task.assignedNodeId === session.nodeId &&
+              (task.status === "ASSIGNED_PENDING_START" || task.status === "IN_PROGRESS")
+          ) ?? null
+        : null;
+    }
+
+    return (
+      tasks.find(
+        (task) =>
+          (task.assignedOperatorId === session.operatorId || task.assignedNodeId === session.nodeId) &&
+          (task.status === "ASSIGNED_PENDING_START" || task.status === "IN_PROGRESS")
+      ) ?? null
+    );
+  }, [session.nodeId, session.operatorId, tasks, viewMode]);
 
   const highlightedTask = useMemo(() => {
     if (selectedTaskId) {
@@ -121,6 +186,7 @@ const App = () => {
 
     if (viewMode === "operator") {
       return (
+        operatorPreparedTask ??
         tasks.find((task) => task.robotId === activeRobotId && task.status !== "COMPLETED") ??
         tasks.find((task) => task.status !== "COMPLETED") ??
         null
@@ -132,7 +198,66 @@ const App = () => {
     }
 
     return tasks.find((task) => task.status !== "COMPLETED") ?? null;
-  }, [activeRobotId, selectedTaskId, tasks, viewMode]);
+  }, [activeRobotId, operatorPreparedTask, selectedTaskId, tasks, viewMode]);
+
+  useEffect(() => {
+    void api
+      .getSystemMode()
+      .then(setSystemMode)
+      .catch(() => undefined)
+      .finally(() => setHasLoadedSystemMode(true));
+    void api.getGameState().then(setGameState).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedSystemMode) {
+      return;
+    }
+
+    if (!isKnownAppPath) {
+      navigateTo(systemMode === "GAME" && !isCentralSessionActive ? "/game" : isCentralSessionActive ? "/admin" : "/");
+      return;
+    }
+
+    if (isAdminGameViewPath && !isCentralSessionActive) {
+      navigateTo("/admin");
+      return;
+    }
+
+    if (systemMode === "GAME") {
+      if (accessRole === "operator") {
+        setAccessRole(null);
+        setOperatorNodeId(null);
+        setSession({ role: "central", nodeId: null, operatorId: null, operatorUsername: null, token: null });
+        setSelectedRobotId(null);
+        setSelectedGridCell(null);
+        setSelectedTaskId(null);
+        setOperatorAccessError(null);
+        window.sessionStorage.removeItem(ACCESS_ROLE_STORAGE_KEY);
+        window.sessionStorage.removeItem(OPERATOR_NODE_STORAGE_KEY);
+      }
+
+      if (isRootPath && GAME_ONLY_REDIRECT) {
+        navigateTo(
+          isCentralSessionActive ? "/admin" : "/game",
+          isCentralSessionActive
+            ? undefined
+            : {
+                flashMessage: "GRIDBOT está actualmente en modo juego. Accede desde la pantalla de juego."
+              }
+        );
+      }
+    }
+  }, [
+    accessRole,
+    hasLoadedSystemMode,
+    isAdminGameViewPath,
+    isCentralSessionActive,
+    isKnownAppPath,
+    isRootPath,
+    navigateTo,
+    systemMode
+  ]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -165,6 +290,16 @@ const App = () => {
     setActiveSessions(sessions);
   }, [accessRole, session.token]);
 
+  const refreshOperators = useCallback(async () => {
+    if (!session.token || accessRole !== "central") {
+      setOperators([]);
+      return;
+    }
+
+    const nextOperators = await api.getOperators(session.token);
+    setOperators(nextOperators);
+  }, [accessRole, session.token]);
+
   useEffect(() => {
     if (!highlightedTask) {
       setSelectedTaskId(null);
@@ -175,72 +310,81 @@ const App = () => {
   }, [highlightedTask]);
 
   useEffect(() => {
+    if (viewMode !== "operator" || !operatorPreparedTask) {
+      return;
+    }
+
+    setSelectedTaskId((current) => (current === operatorPreparedTask.id ? current : operatorPreparedTask.id));
+    setSelectedRobotId((current) =>
+      current === operatorPreparedTask.robotId ? current : operatorPreparedTask.robotId
+    );
+  }, [operatorPreparedTask, viewMode]);
+
+  useEffect(() => {
     if (accessRole === "central" && session.token) {
       void refreshActiveSessions();
+      void refreshOperators();
       return;
     }
 
     setActiveSessions([]);
-  }, [accessRole, refreshActiveSessions, session.token]);
+    setOperators([]);
+  }, [accessRole, refreshActiveSessions, refreshOperators, session.token]);
 
   useEffect(() => {
-    if (!shouldRestoreOperatorSession || accessRole !== "operator" || !operatorNodeId || session.token) {
+    if (!session.token) {
       return;
     }
 
-    let active = true;
-    setIsAuthenticatingOperator(true);
-    setOperatorAccessError(null);
+    const onModeChanged = (payload: { mode: SystemMode }) => {
+      setSystemMode(payload.mode);
+    };
+    const onGameState = (payload: GameStateSnapshot) => {
+      setGameState(payload);
+    };
 
-    void api
-      .loginOperatorSession(operatorNodeId)
-      .then((nextSession) => {
-        if (!active) {
-          return;
-        }
-
-        setSession(nextSession);
-      })
-      .catch((error) => {
-        if (!active) {
-          return;
-        }
-
-        setOperatorAccessError(
-          error instanceof Error ? error.message : "No se pudo restaurar la sesion del operador."
-        );
-      })
-      .finally(() => {
-        if (!active) {
-          return;
-        }
-
-        setIsAuthenticatingOperator(false);
-        setShouldRestoreOperatorSession(false);
-      });
+    socket.on("system:modeChanged", onModeChanged);
+    socket.on("game:state", onGameState);
 
     return () => {
-      active = false;
+      socket.off("system:modeChanged", onModeChanged);
+      socket.off("game:state", onGameState);
     };
-  }, [accessRole, operatorNodeId, session.token, shouldRestoreOperatorSession]);
+  }, [session.token]);
 
   const handleGridCellClick = async (position: GridPosition) => {
-    const obstacleExists = obstacles.some(
-      (obstacle) => obstacle.x === position.x && obstacle.y === position.y
-    );
-
-    if (obstacleExists) {
-      await removeObstacle(position);
+    if (systemMode === "GAME") {
       return;
     }
 
-    await addObstacle(position);
+    setSelectedGridCell(position);
+    const robotAtCell = robots.find((robot) => robot.position.x === position.x && robot.position.y === position.y);
+    if (robotAtCell) {
+      setSelectedRobotId(robotAtCell.id);
+      return;
+    }
+
+    setSelectedRobotId(null);
+  };
+
+  const handleSelectRobot = (robotId: string | null) => {
+    setSelectedRobotId(robotId);
+    const robot = robotId ? robots.find((entry) => entry.id === robotId) : null;
+    setSelectedGridCell(robot ? robot.position : null);
+  };
+
+  const emitAdminGameEvent = (eventName: "game:adminStart" | "game:adminPause" | "game:adminResume" | "game:adminReset") => {
+    if (!session.token || accessRole !== "central") {
+      return;
+    }
+
+    socket.emit(eventName);
   };
 
   const handleSelectTask = async (taskId: string) => {
     const previouslyPreparedTask =
       viewMode === "operator" && selectedTaskId && selectedTaskId !== taskId
-        ? tasks.find((task) => task.id === selectedTaskId && (task.status === "ASSIGNED" || task.status === "REASSIGNED"))
+        ? tasks.find((task) => task.id === selectedTaskId && task.status === "ASSIGNED_PENDING_START")
         : null;
 
     if (previouslyPreparedTask) {
@@ -260,14 +404,14 @@ const App = () => {
   const resetToSelection = () => {
     setAccessRole(null);
     setOperatorNodeId(null);
-    setSession({ role: "central", nodeId: null, token: null });
+    setSession({ role: "central", nodeId: null, operatorId: null, operatorUsername: null, token: null });
     setSelectedRobotId(null);
+    setSelectedGridCell(null);
     setSelectedTaskId(null);
     setCentralAccessError(null);
     setCentralLockMessage(null);
     setOperatorAccessError(null);
     setActiveSessions([]);
-    setShouldRestoreOperatorSession(false);
     window.sessionStorage.removeItem(ACCESS_ROLE_STORAGE_KEY);
     window.sessionStorage.removeItem(OPERATOR_NODE_STORAGE_KEY);
   };
@@ -282,7 +426,7 @@ const App = () => {
       setAccessRole("central");
       setSession(nextSession);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo iniciar la sesion central.";
+      const message = error instanceof Error ? error.message : "No se pudo iniciar la sesión central.";
       if (message.includes("ya esta en uso")) {
         setCentralLockMessage(message);
       } else {
@@ -293,7 +437,7 @@ const App = () => {
     }
   };
 
-  const handleOperatorLogin = async () => {
+  const handleOperatorLogin = async (credentials: { username: string; password: string }) => {
     if (!operatorNodeId) {
       return;
     }
@@ -302,16 +446,19 @@ const App = () => {
     setOperatorAccessError(null);
 
     try {
-      const nextSession = await api.loginOperatorSession(operatorNodeId);
+      const nextSession = await api.loginOperatorSession(
+        operatorNodeId,
+        credentials.username,
+        credentials.password
+      );
       setAccessRole("operator");
       setSession(nextSession);
     } catch (error) {
       setOperatorAccessError(
-        error instanceof Error ? error.message : "No se pudo iniciar la sesion del operador."
+        error instanceof Error ? error.message : "No se pudo iniciar la sesión del operador."
       );
     } finally {
       setIsAuthenticatingOperator(false);
-      setShouldRestoreOperatorSession(false);
     }
   };
 
@@ -325,6 +472,7 @@ const App = () => {
     }
 
     resetToSelection();
+    navigateTo(systemMode === "GAME" ? "/admin" : "/");
   };
 
   const handleReleaseOperatorSession = async (nodeId: OperatorNodeCode) => {
@@ -335,6 +483,94 @@ const App = () => {
     await api.releaseSession({ role: "operator", nodeId }, session.token);
     await refreshActiveSessions();
   };
+
+  const handleCreateRobot = async (payload: RobotAdminInput) => {
+    if (!session.token) {
+      return;
+    }
+
+    const robot = await api.createRobot(payload, session.token);
+    handleSelectRobot(robot.id);
+  };
+
+  const handleUpdateRobot = async (robotId: string, payload: RobotAdminInput) => {
+    if (!session.token) {
+      return;
+    }
+
+    await api.updateRobot(robotId, payload, session.token);
+  };
+
+  const handleToggleRobot = async (robot: RobotState) => {
+    if (!session.token) {
+      return;
+    }
+
+    await api.updateRobotStatus(
+      robot.id,
+      {
+        status: robot.isActive ? "inactivo" : "activo",
+        isActive: !robot.isActive
+      },
+      session.token
+    );
+  };
+
+  const handleCreateOperator = async (payload: OperatorAdminInput & { password: string }) => {
+    if (!session.token) {
+      return;
+    }
+
+    await api.createOperator(payload, session.token);
+    await refreshOperators();
+  };
+
+  const handleUpdateOperator = async (operatorId: string, payload: OperatorAdminInput) => {
+    if (!session.token) {
+      return;
+    }
+
+    await api.updateOperator(operatorId, payload, session.token);
+    await refreshOperators();
+  };
+
+  const handleToggleOperator = async (operator: Operator) => {
+    if (!session.token) {
+      return;
+    }
+
+    await api.updateOperatorStatus(operator.id, !operator.isActive, session.token);
+    await refreshOperators();
+  };
+
+  const handleSendRobotCommand = async (payload: {
+    robotId: string;
+    command: "PAUSE" | "RESUME" | "EMERGENCY_STOP" | "SET_SPEED";
+    speedCellsPerSec?: number;
+  }) => {
+    if (!session.token) {
+      return;
+    }
+
+    await api.sendRobotCommand(payload.robotId, payload, session.token);
+    await refreshHistoryEvents();
+  };
+
+  const showAdminGameView =
+    hasLoadedSystemMode && accessRole === "central" && session.token !== null && isAdminGameViewPath;
+
+  if (showAdminGameView) {
+    return (
+      <AdminGameView
+        systemMode={systemMode}
+        gameState={gameState}
+        onBackToAdmin={() => navigateTo("/admin", { replace: false })}
+        onPause={() => emitAdminGameEvent("game:adminPause")}
+        onResume={() => emitAdminGameEvent("game:adminResume")}
+        onReset={() => emitAdminGameEvent("game:adminReset")}
+      />
+    );
+  }
 
   return (
     <div className="app-shell notranslate" translate="no">
@@ -356,37 +592,101 @@ const App = () => {
         />
 
         <div className="app-content">
-          {accessRole === null ? (
+          {!hasLoadedSystemMode ? (
+            <main className="dashboard">
+              <section className="hero">
+                <div>
+                  <p className="eyebrow">GRIDROBOT</p>
+                  <h1>Cargando estado del sistema</h1>
+                  <p className="hero__lede">Cargando modo del sistema para mostrar la vista correcta.</p>
+                </div>
+              </section>
+            </main>
+          ) : accessRole === null ? (
             <AccessSelectionScreen
               onSelectCentral={() => {
                 setAccessRole("central");
-                setSession({ role: "central", nodeId: null, token: null });
+                setSession({ role: "central", nodeId: null, operatorId: null, operatorUsername: null, token: null });
               }}
               onSelectOperator={() => {
                 setAccessRole("operator");
-                setSession({ role: "operator", nodeId: operatorNodeId, token: null });
+                setSession({ role: "operator", nodeId: operatorNodeId, operatorId: null, operatorUsername: null, token: null });
               }}
+              showOperator={!isAdminAreaPath && systemMode === "WAREHOUSE"}
+              {...(systemMode === "GAME"
+                ? {
+                    onGoGame: () => {
+                      navigateTo("/game");
+                    }
+                  }
+                : {})}
             />
           ) : accessRole === "central" && !session.token ? (
             <CentralAccessPanel
               isSubmitting={isAuthenticatingCentral}
               errorMessage={centralAccessError}
               lockMessage={centralLockMessage}
-              onBack={resetToSelection}
+              onBack={() => {
+                resetToSelection();
+                navigateTo(systemMode === "GAME" ? "/game" : "/");
+              }}
               onLogin={handleCentralLogin}
             />
-          ) : accessRole === "operator" && !session.token ? (
-            <OperatorAccessPanel
-              selectedNodeId={operatorNodeId}
-              isSubmitting={isAuthenticatingOperator}
-              errorMessage={operatorAccessError}
-              onBack={resetToSelection}
-              onSelectNode={(nodeId) => {
-                setOperatorNodeId(nodeId);
-                setSession({ role: "operator", nodeId, token: null });
-              }}
-              onLogin={handleOperatorLogin}
-            />
+          ) : accessRole === "operator" ? (
+            !session.token && !isAdminAreaPath && systemMode !== "GAME" ? (
+              <OperatorAccessPanel
+                selectedNodeId={operatorNodeId}
+                isSubmitting={isAuthenticatingOperator}
+                errorMessage={operatorAccessError}
+                onBack={resetToSelection}
+                onSelectNode={(nodeId) => {
+                  setOperatorNodeId(nodeId);
+                  setSession({ role: "operator", nodeId, operatorId: null, operatorUsername: null, token: null });
+                }}
+                onLogin={handleOperatorLogin}
+              />
+            ) : !session.token ? (
+              <AccessSelectionScreen
+                onSelectCentral={() => {
+                  setAccessRole("central");
+                  setSession({ role: "central", nodeId: null, operatorId: null, operatorUsername: null, token: null });
+                }}
+                onSelectOperator={() => undefined}
+                showOperator={false}
+                {...(systemMode === "GAME"
+                  ? {
+                      onGoGame: () => {
+                        navigateTo("/game");
+                      }
+                    }
+                  : {})}
+              />
+            ) : (
+              <OperatorDashboard
+                activeSection={activeSection}
+                operatorNodeId={operatorNodeId}
+                width={width}
+                height={height}
+                tick={tick}
+                robots={robots}
+                obstacles={obstacles}
+                previewRoutes={previewRoutes}
+                tasks={tasks}
+                logs={logs}
+                selectedRobotId={activeRobotId}
+                selectedTaskId={selectedTaskId}
+                sessionOperatorId={session.operatorId ?? null}
+                sessionNodeId={session.nodeId ?? null}
+                highlightedTask={highlightedTask}
+                connectionState={connectionState}
+                onSelectTask={handleSelectTask}
+                onSelectRobot={handleSelectRobot}
+                onAssignTask={assignTask}
+                onStartTask={startTask}
+                onCancelTask={cancelTaskPreparation}
+                warehouseActionsDisabled={systemMode === "GAME"}
+              />
+            )
           ) : accessRole === "central" ? (
             <CentralDashboard
               activeSection={activeSection}
@@ -397,44 +697,64 @@ const App = () => {
               obstacles={obstacles}
               previewRoutes={previewRoutes}
               tasks={tasks}
+              operators={operators}
               sessions={activeSessions}
               logs={logs}
+              mqttConnectionState={mqttConnectionState}
+              historyEvents={historyEvents}
+              networkEvents={networkEvents}
               selectedRobotId={activeRobotId}
+              selectedGridCell={selectedGridCell}
               selectedTaskId={selectedTaskId}
               highlightedTask={highlightedTask}
               connectionState={connectionState}
-              onSelectRobot={setSelectedRobotId}
+              systemMode={systemMode}
+              gameState={gameState}
+              onSelectRobot={handleSelectRobot}
               onSelectTask={handleSelectTask}
               onAssignTask={assignTask}
               onStartTask={startTask}
               onCancelTask={cancelTaskPreparation}
               onRefreshSessions={refreshActiveSessions}
               onReleaseOperatorSession={handleReleaseOperatorSession}
+              onCreateRobot={handleCreateRobot}
+              onUpdateRobot={handleUpdateRobot}
+              onToggleRobot={handleToggleRobot}
+              onCreateOperator={handleCreateOperator}
+              onUpdateOperator={handleUpdateOperator}
+              onToggleOperator={handleToggleOperator}
+              onSendRobotCommand={handleSendRobotCommand}
               onGridCellClick={(position) => {
                 void handleGridCellClick(position);
               }}
+              onSystemModeChange={(mode) => {
+                if (!session.token) {
+                  return;
+                }
+
+                void api.setSystemMode(mode, session.token).then(setSystemMode);
+              }}
+              onGameStart={() => emitAdminGameEvent("game:adminStart")}
+              onGamePause={() => emitAdminGameEvent("game:adminPause")}
+              onGameResume={() => emitAdminGameEvent("game:adminResume")}
+              onGameReset={() => emitAdminGameEvent("game:adminReset")}
+              onOpenGameView={() => navigateTo("/admin/game-view", { replace: false })}
             />
           ) : (
-            <OperatorDashboard
-              activeSection={activeSection}
-              operatorNodeId={operatorNodeId}
-              width={width}
-              height={height}
-              tick={tick}
-              robots={robots}
-              obstacles={obstacles}
-              previewRoutes={previewRoutes}
-              tasks={tasks}
-              logs={logs}
-              selectedRobotId={activeRobotId}
-              selectedTaskId={selectedTaskId}
-              highlightedTask={highlightedTask}
-              connectionState={connectionState}
-              onSelectTask={handleSelectTask}
-              onSelectRobot={setSelectedRobotId}
-              onAssignTask={assignTask}
-              onStartTask={startTask}
-              onCancelTask={cancelTaskPreparation}
+            <AccessSelectionScreen
+              onSelectCentral={() => {
+                setAccessRole("central");
+                setSession({ role: "central", nodeId: null, operatorId: null, operatorUsername: null, token: null });
+              }}
+              onSelectOperator={() => undefined}
+              showOperator={false}
+              {...(systemMode === "GAME"
+                ? {
+                    onGoGame: () => {
+                      navigateTo("/game");
+                    }
+                  }
+                : {})}
             />
           )}
         </div>

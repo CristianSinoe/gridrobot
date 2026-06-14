@@ -1,8 +1,9 @@
 import type { PrismaClient, Robot, RobotSupportCapability } from "@prisma/client";
+import { hash } from "bcryptjs";
 
 import { logger } from "../../config/logger.js";
 import type { GridPosition } from "../../shared/types.js";
-import { GridManager } from "../grid/grid-manager.js";
+import type { GridManager } from "../grid/grid-manager.js";
 import { ObstacleGeneratorService } from "../obstacles/obstacle-generator-service.js";
 import { FIXED_RUNTIME_ASSIGNMENTS, ROBOT_CATALOG } from "../robots/robot-catalog.js";
 import { TaskGeneratorService } from "../tasks/task-generator-service.js";
@@ -21,6 +22,7 @@ export class DevelopmentBootstrapService {
 
   public async bootstrap(): Promise<void> {
     const nodes = await this.ensureNodes();
+    await this.ensureOperators(nodes);
     const activeMap = await this.ensureGridMap();
     await this.ensureGridCells(activeMap.id);
     const robots = await this.ensureRobotCatalog(nodes);
@@ -77,37 +79,69 @@ export class DevelopmentBootstrapService {
   }
 
   private async ensureGridMap() {
+    const { width, height } = this.gridManager.getDimensions();
+
     return this.prisma.gridMap.upsert({
       where: { code: "GRIDROBOT-DEFAULT" },
       update: {
         name: "GRIDROBOT Default Map",
-        width: 40,
-        height: 25,
+        width,
+        height,
         isActive: true
       },
       create: {
         code: "GRIDROBOT-DEFAULT",
         name: "GRIDROBOT Default Map",
-        width: 40,
-        height: 25,
+        width,
+        height,
         isActive: true
       }
     });
   }
 
+  private async ensureOperators(nodes: { id: string; code: string }[]): Promise<void> {
+    const nodeByCode = new Map(nodes.map((node) => [node.code, node.id]));
+    const demoOperators = [
+      { name: "Operador B01", username: "operador.b01", password: "gridbot_b01", assignedNodeCode: "PC-B01" },
+      { name: "Operador B02", username: "operador.b02", password: "gridbot_b02", assignedNodeCode: "PC-B02" },
+      { name: "Operador B03", username: "operador.b03", password: "gridbot_b03", assignedNodeCode: "PC-B03" }
+    ];
+
+    for (const operator of demoOperators) {
+      const passwordHash = await hash(operator.password, 10);
+      await this.prisma.operator.upsert({
+        where: { username: operator.username },
+        update: {
+          name: operator.name,
+          passwordHash,
+          assignedNodeId: nodeByCode.get(operator.assignedNodeCode) ?? null,
+          isActive: true
+        },
+        create: {
+          name: operator.name,
+          username: operator.username,
+          passwordHash,
+          assignedNodeId: nodeByCode.get(operator.assignedNodeCode) ?? null,
+          isActive: true
+        }
+      });
+    }
+  }
+
   private async ensureGridCells(mapId: string): Promise<void> {
+    const { width, height } = this.gridManager.getDimensions();
     const existing = await this.prisma.gridCell.count({
       where: { mapId }
     });
 
-    if (existing >= 40 * 25) {
+    if (existing >= width * height) {
       return;
     }
 
     await this.prisma.gridCell.deleteMany({ where: { mapId } });
 
-    const cells = Array.from({ length: 25 }, (_, y) =>
-      Array.from({ length: 40 }, (_, x) => ({
+    const cells = Array.from({ length: height }, (_, y) =>
+      Array.from({ length: width }, (_, x) => ({
         mapId,
         x,
         y,
@@ -125,6 +159,7 @@ export class DevelopmentBootstrapService {
   }
 
   private async ensureRobotCatalog(nodes: { id: string; code: string }[]): Promise<Robot[]> {
+    const { width, height } = this.gridManager.getDimensions();
     const fixedAssignments = new Map<string, string>(
       FIXED_RUNTIME_ASSIGNMENTS.map((entry) => [entry.robotCode, entry.nodeCode])
     );
@@ -141,8 +176,8 @@ export class DevelopmentBootstrapService {
 
     for (const [index, robot] of ROBOT_CATALOG.entries()) {
       const fallbackPosition = {
-        x: (index * 3) % 40,
-        y: Math.floor((index * 3) / 40) % 25
+        x: (index * 3) % width,
+        y: Math.floor((index * 3) / width) % height
       };
       const position = spawnPositions[robot.code] ?? fallbackPosition;
       const assignedNodeCode = fixedAssignments.get(robot.code);
@@ -191,18 +226,16 @@ export class DevelopmentBootstrapService {
 
   private async ensureInitialTasks(robots: Robot[], blockedPositions: GridPosition[]): Promise<void> {
     const existing = await this.prisma.task.count({
-      where: { status: { in: ["PENDING", "ASSIGNED", "REASSIGNED", "IN_PROGRESS", "WAITING_ASSISTANCE"] } }
+      where: { status: { in: ["PENDING", "ASSIGNED_PENDING_START"] } }
     });
 
-    if (existing > 0) {
+    if (existing >= 10) {
       return;
     }
 
-    const fixedRobotCodes = new Set<string>(FIXED_RUNTIME_ASSIGNMENTS.map((entry) => entry.robotCode));
-    const activeRuntimeRobots = robots.filter((robot) => fixedRobotCodes.has(robot.code));
-
-    for (const robot of activeRuntimeRobots) {
-      const task = await this.taskGeneratorService.createCompatibleTaskForRobot(robot, blockedPositions);
+    const missing = 10 - existing;
+    for (let index = 0; index < missing; index += 1) {
+      const task = await this.taskGeneratorService.createAutomaticTask(blockedPositions);
       blockedPositions.push(
         { x: task.originX, y: task.originY },
         { x: task.targetX, y: task.targetY }

@@ -1,0 +1,225 @@
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  .wrap {
+    width: 1056px; height: 816px;
+    display: flex;
+    background: #f4f6fb;
+    font-family: 'Exo 2', sans-serif;
+    border: 1px solid #d0d8e8;
+  }
+  .panel {
+    flex: 1;
+    padding: 26px 20px;
+    position: relative;
+    border-right: 1px solid #d0d8e8;
+    overflow: hidden;
+    background: #ffffff;
+  }
+  .panel:last-child { border-right: none; }
+  .panel.p2 { background: #ffffff; }
+  .panel.p3 { background: #f8faff; }
+  .panel.p4 { background: #f8faff; }
+
+  .sec-label {
+    font-family: 'Orbitron', monospace; font-size: 9.5px;
+    letter-spacing: 3.5px; color: #1e64dc;
+    border-left: 2.5px solid #1e64dc;
+    padding-left: 7px; margin-bottom: 5px;
+  }
+  .sec-title {
+    font-family: 'Orbitron', monospace; font-size: 20.5px; font-weight: 700;
+    color: #0a2050; margin-bottom: 7px; line-height: 1.3;
+  }
+  .desc-text { font-size: 12.8px; color: #4a6888; line-height: 1.64; margin-bottom: 11px; }
+  .divider { border: none; border-top: 1px solid #dde6f0; margin: 10px 0; }
+
+  .hi-box {
+    background: #e8f0fe; border: 1px solid #aac0f0;
+    border-left: 3px solid #1e64dc;
+    border-radius: 2px; padding: 7px 9px; margin: 9px 0;
+  }
+  .hi-box .ht { font-family: 'Orbitron', monospace; font-size: 10px; color: #1e4eaa; margin-bottom: 3px; letter-spacing: 1px; }
+  .hi-box .hb { font-size: 11.8px; color: #3a5878; line-height: 1.54; }
+
+  .ch-item { display: flex; align-items: flex-start; gap: 7px; margin-bottom: 6px; }
+  .ch-dot { width: 6px; height: 6px; border-radius: 50%; background: #f0a020; flex-shrink: 0; margin-top: 3px; }
+  .ch-txt { font-size: 11.8px; color: #4a6888; line-height: 1.46; }
+
+  .flow-step {
+    display: flex; align-items: center; gap: 8px;
+    background: #f0f5ff; border: 1px solid #c0d0ee;
+    border-radius: 3px; padding: 6px 9px; margin-bottom: 6px;
+  }
+  .step-num { font-family: 'Orbitron', monospace; font-size: 12px; color: #1e64dc; font-weight: 700; min-width: 18px; }
+  .step-txt { font-size: 11.2px; color: #3a5878; line-height: 1.38; }
+
+  .tech-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 10px; }
+  .tech-item {
+    display: flex; align-items: center; gap: 7px;
+    background: #f4f7fc; border: 1px solid #cdd9ee;
+    border-radius: 3px; padding: 5px 8px;
+  }
+  .tech-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .td-blue { background: #1e64dc; }
+  .td-green { background: #1a9060; }
+  .td-amber { background: #c07010; }
+  .td-purple { background: #6040cc; }
+  .tech-name { font-size: 11.3px; color: #3a5878; }
+
+  .diff-item { display: flex; align-items: flex-start; gap: 7px; margin-bottom: 8px; }
+  .diff-arrow { color: #1e64dc; font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  .diff-text { font-size: 11.6px; color: #4a6888; line-height: 1.46; }
+
+  .func-card {
+    background: #ffffff; border: 1px solid #cdd9ee;
+    border-left: 3px solid #1e64dc;
+    border-radius: 3px; padding: 8px 10px; margin-bottom: 7px;
+  }
+  .fc-hdr { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+  .fc-icon { font-size: 13px; color: #1e64dc; }
+  .fc-title { font-family: 'Orbitron', monospace; font-size: 10.6px; color: #0a2050; letter-spacing: 1px; font-weight: 700; }
+  .fc-chips { display: flex; flex-wrap: wrap; gap: 3px; }
+  .chip {
+    font-size: 10px; color: #3a5878;
+    background: #f0f4fb; border: 1px solid #c8d6ee;
+    border-radius: 2px; padding: 2px 6px; line-height: 1.4;
+  }
+  .chip.accent { color: #0a3888; background: #dce8fc; border-color: #9ab8ee; }
+
+  .btm { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: #1e64dc; opacity: 0.18; }
+</style>
+
+<div class="wrap">
+  <div class="panel p2">
+    <div class="sec-label">Sistema</div>
+    <div class="sec-title">¿Qué es GRIDBOT?</div>
+    <div class="desc-text">
+      Plataforma de simulación y supervisión de robots móviles en un almacén virtual. Coordina tareas, rutas y obstáculos en tiempo real, operado desde un panel central y nodos de operador.
+    </div>
+
+    <div class="hi-box">
+      <div class="ht">OBJETIVO</div>
+      <div class="hb">Representar de forma didáctica y funcional cómo opera una flota robótica para mover cargas bajo restricciones reales de capacidad, disponibilidad y trayectoria.</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="sec-label">Problema</div>
+    <div class="sec-title">¿Qué desafíos resuelve?</div>
+
+    <div class="ch-item"><div class="ch-dot"></div><div class="ch-txt">Tareas simultáneas con distintas prioridades y tipos de carga</div></div>
+    <div class="ch-item"><div class="ch-dot"></div><div class="ch-txt">Restricciones de capacidad, fragilidad y refrigeración por robot</div></div>
+    <div class="ch-item"><div class="ch-dot"></div><div class="ch-txt">Obstáculos dinámicos que bloquean rutas calculadas</div></div>
+    <div class="ch-item"><div class="ch-dot"></div><div class="ch-txt">Cruces y conflictos entre trayectorias de robots distintos</div></div>
+    <div class="ch-item"><div class="ch-dot"></div><div class="ch-txt">Coordinación distribuida entre centro de control y operadores</div></div>
+
+    <div class="divider"></div>
+
+    <div class="sec-label">Flujo de operación</div>
+
+    <div class="flow-step"><span class="step-num">01</span><span class="step-txt">Operador selecciona una tarea activa disponible</span></div>
+    <div class="flow-step"><span class="step-num">02</span><span class="step-txt">Sistema filtra robots compatibles y disponibles</span></div>
+    <div class="flow-step"><span class="step-num">03</span><span class="step-txt">Se previsualiza la ruta y se detectan conflictos</span></div>
+    <div class="flow-step"><span class="step-num">04</span><span class="step-txt">Operador confirma e inicia el viaje manualmente</span></div>
+
+    <div class="btm"></div>
+  </div>
+
+  <div class="panel p4">
+    <div class="sec-label">Stack tecnológico</div>
+    <div class="sec-title">Tecnologías</div>
+
+    <div class="tech-grid">
+      <div class="tech-item"><div class="tech-dot td-blue"></div><span class="tech-name">React 19</span></div>
+      <div class="tech-item"><div class="tech-dot td-blue"></div><span class="tech-name">TypeScript</span></div>
+      <div class="tech-item"><div class="tech-dot td-blue"></div><span class="tech-name">Vite</span></div>
+      <div class="tech-item"><div class="tech-dot td-green"></div><span class="tech-name">Node.js + Express</span></div>
+      <div class="tech-item"><div class="tech-dot td-amber"></div><span class="tech-name">PostgreSQL</span></div>
+      <div class="tech-item"><div class="tech-dot td-amber"></div><span class="tech-name">Prisma ORM</span></div>
+      <div class="tech-item"><div class="tech-dot td-purple"></div><span class="tech-name">Socket.IO</span></div>
+      <div class="tech-item"><div class="tech-dot td-purple"></div><span class="tech-name">MQTT</span></div>
+      <div class="tech-item"><div class="tech-dot td-green"></div><span class="tech-name">Docker Compose</span></div>
+      <div class="tech-item"><div class="tech-dot td-green"></div><span class="tech-name">Nginx Proxy</span></div>
+      <div class="tech-item"><div class="tech-dot td-blue"></div><span class="tech-name">Zod + bcryptjs</span></div>
+      <div class="tech-item"><div class="tech-dot td-amber"></div><span class="tech-name">Pino Logger</span></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="sec-label">Diferenciadores</div>
+    <div class="sec-title">¿Por qué GRIDBOT?</div>
+
+    <div class="diff-item"><span class="diff-arrow">›</span><span class="diff-text">Simulación visual en tiempo real sobre cuadrícula operativa</span></div>
+    <div class="diff-item"><span class="diff-arrow">›</span><span class="diff-text">Separación real de roles: panel central vs. operadores por nodo</span></div>
+    <div class="diff-item"><span class="diff-arrow">›</span><span class="diff-text">Compatibilidad real entre tarea y robot antes de asignar</span></div>
+    <div class="diff-item"><span class="diff-arrow">›</span><span class="diff-text">Flujo de preparación obligatoria antes de ejecutar el viaje</span></div>
+    <div class="diff-item"><span class="diff-arrow">›</span><span class="diff-text">Detección visual de conflictos y cruces entre rutas</span></div>
+    <div class="diff-item"><span class="diff-arrow">›</span><span class="diff-text">Base de datos persistente para toda la operación</span></div>
+    <div class="diff-item"><span class="diff-arrow">›</span><span class="diff-text">Demo funcional en red local LAN con acceso controlado</span></div>
+
+    <div class="btm"></div>
+  </div>
+
+  <div class="panel p3">
+    <div class="sec-label">Módulos</div>
+    <div class="sec-title">Funcionalidades principales</div>
+
+    <div class="func-card">
+      <div class="fc-hdr"><i class="ti ti-layout-dashboard fc-icon" aria-hidden="true"></i><span class="fc-title">Panel administrador</span></div>
+      <div class="fc-chips">
+        <span class="chip accent">Vista global del sistema</span>
+        <span class="chip">Gestión de robots</span>
+        <span class="chip">Gestión de operadores</span>
+        <span class="chip">Control de sesiones</span>
+        <span class="chip">Modos WAREHOUSE / GAME</span>
+        <span class="chip">Logs operativos</span>
+      </div>
+    </div>
+
+    <div class="func-card">
+      <div class="fc-hdr"><i class="ti ti-user-cog fc-icon" aria-hidden="true"></i><span class="fc-title">Vista de operador</span></div>
+      <div class="fc-chips">
+        <span class="chip accent">Login por nodo PC-B01/02/03</span>
+        <span class="chip">Selección de tareas</span>
+        <span class="chip">Robots compatibles</span>
+        <span class="chip">Preparación de viaje</span>
+        <span class="chip">Inicio manual</span>
+      </div>
+    </div>
+
+    <div class="func-card">
+      <div class="fc-hdr"><i class="ti ti-robot fc-icon" aria-hidden="true"></i><span class="fc-title">Gestión de robots</span></div>
+      <div class="fc-chips">
+        <span class="chip">Persistencia PostgreSQL</span>
+        <span class="chip accent">Capacidad y tipo de carga</span>
+        <span class="chip">Velocidad y peso</span>
+        <span class="chip">Estado operativo</span>
+        <span class="chip">Posición en mapa</span>
+      </div>
+    </div>
+
+    <div class="func-card">
+      <div class="fc-hdr"><i class="ti ti-route fc-icon" aria-hidden="true"></i><span class="fc-title">Rutas y obstáculos</span></div>
+      <div class="fc-chips">
+        <span class="chip accent">Pathfinding calculado</span>
+        <span class="chip">Previsualización de ruta</span>
+        <span class="chip accent">Detección de cruces</span>
+        <span class="chip">Obstáculos persistidos</span>
+        <span class="chip">Recálculo dinámico</span>
+      </div>
+    </div>
+
+    <div class="func-card">
+      <div class="fc-hdr"><i class="ti ti-broadcast fc-icon" aria-hidden="true"></i><span class="fc-title">Comunicación en tiempo real</span></div>
+      <div class="fc-chips">
+        <span class="chip accent">Socket.IO</span>
+        <span class="chip">MQTT telemetría</span>
+        <span class="chip">Snapshots en vivo</span>
+        <span class="chip">Sin recarga manual</span>
+      </div>
+    </div>
+
+    <div class="btm"></div>
+  </div>
+</div>

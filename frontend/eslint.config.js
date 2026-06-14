@@ -17,6 +17,11 @@ export default [
         ecmaFeatures: {
           jsx: true
         }
+      },
+      globals: {
+        window: "readonly",
+        document: "readonly",
+        fetch: "readonly"
       }
     },
     plugins: {
@@ -28,6 +33,7 @@ export default [
       ...tseslint.configs.recommended.rules,
       ...reactPlugin.configs.recommended.rules,
       ...reactHooksPlugin.configs.recommended.rules,
+      "no-undef": "off",
       "react/react-in-jsx-scope": "off",
       "@typescript-eslint/consistent-type-imports": "error"
     },

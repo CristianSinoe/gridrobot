@@ -43,6 +43,7 @@ enum RobotSupportCapability {
 enum TaskStatus {
   PENDING
   ASSIGNED
+  ASSIGNED_PENDING_START
   REASSIGNED
   IN_PROGRESS
   WAITING_ASSISTANCE
@@ -117,6 +118,18 @@ enum MetricType {
   TIMER
 }
 
+enum EventType {
+  ROBOT_STATE
+  TASK_CREATED
+  TASK_ASSIGNED
+  TASK_STARTED
+  TASK_COMPLETED
+  OBSTACLE_DETECTED
+  OBSTACLE_MOVED
+  MQTT_MESSAGE_RECEIVED
+  ACTUATOR_COMMAND
+}
+
 model Node {
   id              String           @id @default(uuid())
   code            String           @unique
@@ -132,6 +145,7 @@ model Node {
   robots          Robot[]
   createdTasks    Task[]           @relation("TaskCreatedByNode")
   taskAssignments TaskAssignment[]
+  operators       Operator[]
   systemLogs      SystemLog[]
   metrics         Metric[]
 
@@ -170,6 +184,8 @@ model Robot {
   routes          Route[]
   logs            SystemLog[]
   metrics         Metric[]
+  eventLogs       EventLog[]
+  telemetrySamples RobotTelemetry[]
 
   @@index([nodeId])
   @@index([currentMapId])
@@ -228,6 +244,8 @@ model Task {
   assignments     TaskAssignment[]
   routes          Route[]
   logs            SystemLog[]
+  eventLogs       EventLog[]
+  telemetrySamples RobotTelemetry[]
 
   @@index([status, priority])
   @@index([robotId, status])
@@ -244,6 +262,7 @@ model TaskAssignment {
   taskId           String
   robotId          String
   assignedByNodeId String?
+  assignedOperatorId String?
   acceptedAt       DateTime?
   startedAt        DateTime?
   completedAt      DateTime?
@@ -252,12 +271,31 @@ model TaskAssignment {
   task             Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
   robot            Robot     @relation(fields: [robotId], references: [id], onDelete: Cascade)
   assignedByNode   Node?     @relation(fields: [assignedByNodeId], references: [id], onDelete: SetNull)
+  assignedOperator Operator? @relation(fields: [assignedOperatorId], references: [id], onDelete: SetNull)
 
   @@unique([taskId, robotId])
   @@index([taskId, createdAt])
   @@index([robotId, createdAt])
   @@index([assignedByNodeId])
+  @@index([assignedOperatorId])
   @@map("task_assignments")
+}
+
+model Operator {
+  id              String           @id @default(uuid())
+  name            String
+  username        String           @unique
+  passwordHash    String
+  assignedNodeId  String?
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  assignedNode    Node?            @relation(fields: [assignedNodeId], references: [id], onDelete: SetNull)
+  taskAssignments TaskAssignment[]
+
+  @@index([assignedNodeId])
+  @@index([isActive, username])
+  @@map("operators")
 }
 
 model GridMap {
@@ -422,4 +460,45 @@ model Metric {
   @@index([nodeId, recordedAt])
   @@index([robotId, recordedAt])
   @@map("metrics")
+}
+
+model EventLog {
+  id        String    @id @default(uuid())
+  type      EventType
+  source    String
+  topic     String?
+  robotId   String?
+  taskId    String?
+  payload   Json
+  createdAt DateTime  @default(now())
+  robot     Robot?    @relation(fields: [robotId], references: [id], onDelete: SetNull)
+  task      Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([type, createdAt])
+  @@index([source, createdAt])
+  @@index([topic, createdAt])
+  @@index([robotId, createdAt])
+  @@index([taskId, createdAt])
+  @@map("event_logs")
+}
+
+model RobotTelemetry {
+  id               String      @id @default(uuid())
+  robotId          String
+  x                Int
+  y                Int
+  status           RobotStatus
+  speedCellsPerSec Float?
+  taskId           String?
+  source           String
+  recordedAt       DateTime
+  createdAt        DateTime    @default(now())
+  robot            Robot       @relation(fields: [robotId], references: [id], onDelete: Cascade)
+  task             Task?       @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([robotId, recordedAt])
+  @@index([taskId, recordedAt])
+  @@index([status, recordedAt])
+  @@index([source, recordedAt])
+  @@map("robot_telemetry")
 }

@@ -1,4 +1,4 @@
-import type { GridPosition, RobotState } from "../../shared/types.js";
+import type { GridPosition } from "../../shared/types.js";
 import type { GridManager } from "../grid/grid-manager.js";
 import type { ObstacleManager } from "../obstacles/obstacle-manager.js";
 import type { RobotService } from "../robots/robot-service.js";

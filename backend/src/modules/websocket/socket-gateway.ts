@@ -1,18 +1,23 @@
 import type { Server as HttpServer } from "node:http";
 
-import { Server as SocketIOServer, type Socket } from "socket.io";
+import { Server as SocketIOServer } from "socket.io";
 
-import { env } from "../../config/env.js";
+import { buildCorsOptions } from "../../config/network.js";
 import type { WorldBootstrap, WorldSnapshot } from "../../shared/types.js";
 import type { ActiveSession, OperatorNodeCode, SessionAccessService } from "../central-access/session-access-service.js";
+import type { GameService } from "../game/game-service.js";
+import { registerAdminGameSocketHandlers } from "../game/game-socket-handler.js";
 import type { GridManager } from "../grid/grid-manager.js";
 import type { ObstacleManager } from "../obstacles/obstacle-manager.js";
 import type { PreviewRouteService } from "../preview-routes/preview-route-service.js";
+import type { MqttBridgeService } from "../mqtt/mqtt-bridge-service.js";
 import type { RobotService } from "../robots/robot-service.js";
+import type { SystemModeService } from "../system/system-mode-service.js";
 import type { TaskService } from "../tasks/task-service.js";
 import type { WorldVisibilityService } from "../world-visibility/world-visibility-service.js";
+import type { SocketConnectionLimiter } from "./socket-security.js";
 
-export interface GatewayDependencies {
+export interface GatewayBaseDependencies {
   sessionAccessService: SessionAccessService;
   robotService: RobotService;
   obstacleManager: ObstacleManager;
@@ -22,7 +27,14 @@ export interface GatewayDependencies {
   previewRouteService: PreviewRouteService;
 }
 
-export type ViewerPayloadDependencies = Omit<GatewayDependencies, "sessionAccessService">;
+export interface GatewayDependencies extends GatewayBaseDependencies {
+  systemModeService: SystemModeService;
+  gameService: GameService;
+  socketConnectionLimiter: SocketConnectionLimiter;
+  mqttBridgeService: MqttBridgeService;
+}
+
+export type ViewerPayloadDependencies = Omit<GatewayBaseDependencies, "sessionAccessService">;
 
 export type SocketViewerContext =
   | { role: "central"; nodeId: null; robotId: null }
@@ -93,7 +105,7 @@ export const buildWorldPayload = async (
 
 export const emitTasksToAllViewers = async (
   io: SocketIOServer,
-  dependencies: GatewayDependencies
+  dependencies: GatewayBaseDependencies
 ): Promise<void> => {
   for (const socket of io.sockets.sockets.values()) {
     const token = typeof socket.handshake.auth.sessionToken === "string" ? socket.handshake.auth.sessionToken : "";
@@ -102,7 +114,7 @@ export const emitTasksToAllViewers = async (
       continue;
     }
 
-    const viewer = getViewerContext(
+    getViewerContext(
       dependencies,
       session,
       operatorFocusBySocket.get(socket.id) ?? null
@@ -114,7 +126,7 @@ export const emitTasksToAllViewers = async (
 
 export const emitObstaclesToAllViewers = async (
   io: SocketIOServer,
-  dependencies: GatewayDependencies
+  dependencies: GatewayBaseDependencies
 ): Promise<void> => {
   for (const socket of io.sockets.sockets.values()) {
     const token = typeof socket.handshake.auth.sessionToken === "string" ? socket.handshake.auth.sessionToken : "";
@@ -140,7 +152,7 @@ export const emitObstaclesToAllViewers = async (
 
 export const emitPreviewRoutesToAllViewers = async (
   io: SocketIOServer,
-  dependencies: GatewayDependencies
+  dependencies: GatewayBaseDependencies
 ): Promise<void> => {
   for (const socket of io.sockets.sockets.values()) {
     const token = typeof socket.handshake.auth.sessionToken === "string" ? socket.handshake.auth.sessionToken : "";
@@ -165,34 +177,66 @@ export const createSocketGateway = (
   dependencies: GatewayDependencies
 ): SocketIOServer => {
   const io = new SocketIOServer(httpServer, {
+    path: "/socket.io",
     cors: {
-      origin: env.allowedOrigins,
-      credentials: true
+      ...buildCorsOptions()
     }
   });
 
   io.on("connection", (socket) => {
+    const connectionAttempt = dependencies.socketConnectionLimiter.register(socket);
+    if (!connectionAttempt.allowed) {
+      socket.emit("gateway:error", {
+        message: "Se alcanzó el límite de conexiones permitidas para esta red."
+      });
+      socket.disconnect(true);
+      return;
+    }
+
+    const clientIp = connectionAttempt.clientIp;
     const sessionToken =
       typeof socket.handshake.auth.sessionToken === "string" ? socket.handshake.auth.sessionToken : "";
     const attachedSession = dependencies.sessionAccessService.attachSocket(
       sessionToken,
       socket.id,
-      socket.handshake.address || null
+      clientIp
     );
 
     if (!attachedSession) {
       socket.emit("gateway:error", {
         message: "La sesion seleccionada ya no es valida. Inicie sesion de nuevo."
       });
+      dependencies.socketConnectionLimiter.release(clientIp);
+      socket.disconnect(true);
+      return;
+    }
+
+    if (dependencies.systemModeService.isGameMode() && attachedSession.role !== "central") {
+      socket.emit("gateway:error", {
+        message: "El sistema está en modo juego. Esta acción no está disponible."
+      });
+      dependencies.socketConnectionLimiter.release(clientIp);
       socket.disconnect(true);
       return;
     }
 
     const viewer = getViewerContext(dependencies, attachedSession);
     operatorFocusBySocket.set(socket.id, null);
+    registerAdminGameSocketHandlers(socket, {
+      sessionAccessService: dependencies.sessionAccessService,
+      systemModeService: dependencies.systemModeService,
+      gameService: dependencies.gameService,
+      socketConnectionLimiter: dependencies.socketConnectionLimiter
+    });
 
     void buildWorldPayload(dependencies, viewer).then((payload) => {
       socket.emit("world:bootstrap", payload);
+    });
+    socket.emit("network:status", {
+      mqttConnectionState: dependencies.mqttBridgeService.getConnectionState()
+    });
+    socket.emit("system:modeChanged", {
+      mode: dependencies.systemModeService.getMode()
     });
 
     socket.on("tasks:query", async (payload?: { robotId?: string }) => {
@@ -208,11 +252,25 @@ export const createSocketGateway = (
     });
 
     socket.on("world:refresh", async () => {
+      if (dependencies.systemModeService.isGameMode() && attachedSession.role !== "central") {
+        socket.emit("gateway:error", {
+          message: "El sistema está en modo juego. Esta acción no está disponible."
+        });
+        return;
+      }
+
       await emitTasksToAllViewers(io, dependencies);
       await emitPreviewRoutesToAllViewers(io, dependencies);
     });
 
     socket.on("viewer:focusRobot", async (payload?: { robotId?: string | null }) => {
+      if (dependencies.systemModeService.isGameMode() && attachedSession.role !== "central") {
+        socket.emit("gateway:error", {
+          message: "El sistema está en modo juego. Esta acción no está disponible."
+        });
+        return;
+      }
+
       const requestedRobotId = payload?.robotId ?? null;
       if (requestedRobotId && !dependencies.robotService.getAll().some((robot) => robot.id === requestedRobotId)) {
         socket.emit("gateway:error", {
@@ -234,7 +292,15 @@ export const createSocketGateway = (
 
     socket.on("task:claim", async (payload: { taskId: string; robotId: string }) => {
       try {
-        const task = await dependencies.taskService.assign(payload.taskId, payload.robotId, attachedSession.nodeId);
+        if (dependencies.systemModeService.isGameMode() && attachedSession.role !== "central") {
+          throw new Error("El sistema está en modo juego. Esta acción no está disponible.");
+        }
+        const task = await dependencies.taskService.assign(
+          payload.taskId,
+          payload.robotId,
+          attachedSession.nodeId,
+          attachedSession.operatorId
+        );
         await dependencies.previewRouteService.upsertPreview(payload.taskId, payload.robotId, attachedSession.nodeId);
         io.emit("task:updated", task);
         io.emit("robot:updated", dependencies.robotService.getById(payload.robotId));
@@ -249,7 +315,15 @@ export const createSocketGateway = (
 
     socket.on("task:assign", async (payload: { taskId: string; robotId: string }) => {
       try {
-        const task = await dependencies.taskService.assign(payload.taskId, payload.robotId, attachedSession.nodeId);
+        if (dependencies.systemModeService.isGameMode() && attachedSession.role !== "central") {
+          throw new Error("El sistema está en modo juego. Esta acción no está disponible.");
+        }
+        const task = await dependencies.taskService.assign(
+          payload.taskId,
+          payload.robotId,
+          attachedSession.nodeId,
+          attachedSession.operatorId
+        );
         await dependencies.previewRouteService.upsertPreview(payload.taskId, payload.robotId, attachedSession.nodeId);
         io.emit("task:updated", task);
         io.emit("robot:updated", dependencies.robotService.getById(payload.robotId));
@@ -264,6 +338,9 @@ export const createSocketGateway = (
 
     socket.on("obstacle:upsert", async (payload: { x: number; y: number }) => {
       try {
+        if (dependencies.systemModeService.isGameMode() && attachedSession.role !== "central") {
+          throw new Error("El sistema está en modo juego. Esta acción no está disponible.");
+        }
         await dependencies.obstacleManager.upsert(payload);
         const changedRobots = await dependencies.robotService.recalculateRoutesForObstacles();
         await dependencies.previewRouteService.recalculateAll();
@@ -285,6 +362,9 @@ export const createSocketGateway = (
 
     socket.on("obstacle:remove", async (payload: { x: number; y: number }) => {
       try {
+        if (dependencies.systemModeService.isGameMode() && attachedSession.role !== "central") {
+          throw new Error("El sistema está en modo juego. Esta acción no está disponible.");
+        }
         await dependencies.obstacleManager.remove(payload);
         dependencies.worldVisibilityService.handleObstacleRemoved(payload);
         const changedRobots = await dependencies.robotService.recalculateRoutesForObstacles();
@@ -306,6 +386,7 @@ export const createSocketGateway = (
       }
       operatorFocusBySocket.delete(socket.id);
       dependencies.sessionAccessService.releaseBySocket(socket.id);
+      dependencies.socketConnectionLimiter.release(clientIp);
     });
   });
 

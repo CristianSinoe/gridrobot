@@ -1,5 +1,6 @@
 import type {
   CapacityUnit,
+  GameStatus,
   RobotStatus,
   RobotSupport,
   Task,
@@ -18,6 +19,7 @@ export const robotStatusText: Record<RobotStatus, string> = {
 export const taskStatusText: Record<TaskStatus, string> = {
   PENDING: "Pendiente",
   ASSIGNED: "Tomada",
+  ASSIGNED_PENDING_START: "Preparada",
   REASSIGNED: "Reasignada",
   IN_PROGRESS: "En viaje",
   WAITING_ASSISTANCE: "Esperando asistencia",
@@ -31,16 +33,16 @@ export const taskTypeText: Record<TaskType, string> = {
   MOVE_BOTTLES: "Mover botellas",
   MOVE_SAND: "Mover arena",
   MOVE_GRAVEL: "Mover grava",
-  MOVE_LIQUID_BULK: "Mover carga liquida",
+  MOVE_LIQUID_BULK: "Mover carga líquida",
   MOVE_COLD_PRODUCTS: "Mover productos refrigerados",
-  MOVE_FRAGILE_PRODUCTS: "Mover productos fragiles"
+  MOVE_FRAGILE_PRODUCTS: "Mover productos frágiles"
 };
 
 export const supportText: Record<RobotSupport, string> = {
   UNIT_LOAD: "carga unitaria",
   BULK_LOAD: "carga a granel",
-  NON_FRAGILE: "no fragil",
-  FRAGILE: "fragil",
+  NON_FRAGILE: "no frágil",
+  FRAGILE: "frágil",
   REFRIGERATED: "refrigerado"
 };
 
@@ -55,11 +57,18 @@ export const connectionStateText: Record<"connecting" | "connected" | "disconnec
   disconnected: "desconectado"
 };
 
+export const gameStatusText: Record<GameStatus, string> = {
+  IDLE: "Esperando inicio de partida…",
+  RUNNING: "Partida en curso",
+  PAUSED: "Partida pausada",
+  FINISHED: "Partida finalizada"
+};
+
 export const priorityText: Record<Task["priority"], string> = {
   LOW: "Baja",
   NORMAL: "Normal",
   HIGH: "Alta",
-  CRITICAL: "Critica"
+  CRITICAL: "Crítica"
 };
 
 export const executionStageText: Record<Task["executionStage"], string> = {

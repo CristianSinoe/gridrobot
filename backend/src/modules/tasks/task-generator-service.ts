@@ -1,7 +1,15 @@
-import type { CapacityUnit, PrismaClient, Robot, RobotSupportCapability, Task } from "@prisma/client";
+import type {
+  CapacityUnit,
+  PrismaClient,
+  Robot,
+  RobotSupportCapability,
+  Task,
+  TaskPriority
+} from "@prisma/client";
 
+import { badRequest } from "../../shared/errors.js";
 import type { GridPosition } from "../../shared/types.js";
-import { GridManager } from "../grid/grid-manager.js";
+import type { GridManager } from "../grid/grid-manager.js";
 
 interface DeterministicRandom {
   next(): number;
@@ -25,17 +33,11 @@ class SeededRandom implements DeterministicRandom {
   }
 }
 
-const TASK_TYPES = [
-  "MOVE_BOXES",
-  "MOVE_BOTTLES",
-  "MOVE_SAND",
-  "MOVE_GRAVEL",
-  "MOVE_LIQUID_BULK",
-  "MOVE_COLD_PRODUCTS",
-  "MOVE_FRAGILE_PRODUCTS"
-] as const;
-
-const LOAD_CAPABILITIES: RobotSupportCapability[] = ["BULK_LOAD", "UNIT_LOAD"];
+interface RobotProfile {
+  supports: RobotSupportCapability[];
+  capacityUnit: CapacityUnit | null;
+  capacityValue: number | null;
+}
 
 export class TaskGeneratorService {
   private readonly random: DeterministicRandom;
@@ -48,52 +50,139 @@ export class TaskGeneratorService {
     this.random = new SeededRandom(seed);
   }
 
-  public async createCompatibleTaskForRobot(
-    robot: Robot,
-    blockedPositions: GridPosition[]
-  ): Promise<Task> {
-    const reserved = new Set(blockedPositions.map((position) => this.gridManager.key(position)));
-    const origin = this.pickAvailableCell(reserved);
-    reserved.add(this.gridManager.key(origin));
-    const target = this.pickAvailableCell(reserved);
-
-    const requiresFragileHandling = robot.supports.includes("FRAGILE");
-    const requiresRefrigeration = robot.supports.includes("REFRIGERATED") && this.random.next() > 0.5;
-    const loadTypeRequired = robot.supports.includes("BULK_LOAD") && robot.capacityUnit === "kg"
-      ? this.pickOne<RobotSupportCapability>(LOAD_CAPABILITIES.filter((value) => robot.supports.includes(value)))
-      : "UNIT_LOAD";
-
-    const requiredAmount = Math.max(
-      1,
-      Math.min(
-        robot.capacityValue ?? 1,
-        Math.floor((robot.capacityValue ?? 1) * (0.45 + this.random.next() * 0.4))
-      )
-    );
-
-    const type = this.pickTaskType(loadTypeRequired, requiresRefrigeration, requiresFragileHandling);
-
-    return this.prisma.task.create({
-      data: {
-        code: `TASK-${Date.now()}-${Math.floor(this.random.next() * 10000)}`,
-        name: `${type.replaceAll("_", " ")} ${origin.x},${origin.y} -> ${target.x},${target.y}`,
-        description: `Auto-generated task for ${robot.code}`,
-        type,
-        status: "PENDING",
-        priority: this.pickPriority(requiredAmount),
-        executionStage: "TO_ORIGIN",
-        originX: origin.x,
-        originY: origin.y,
-        targetX: target.x,
-        targetY: target.y,
-        loadTypeRequired,
-        requiresRefrigeration,
-        requiresFragileHandling,
-        requiredAmount,
-        amountUnit: robot.capacityUnit as CapacityUnit,
-        robotId: null
-      }
+  public async createAutomaticTask(blockedPositions: GridPosition[]): Promise<Task> {
+    const robots = await this.prisma.robot.findMany({
+      where: {
+        isActive: true,
+        status: { notIn: ["OFFLINE", "BLOCKED"] }
+      },
+      orderBy: { code: "asc" }
     });
+
+    if (robots.length === 0) {
+      throw badRequest("No hay robots activos para generar tareas automáticas.");
+    }
+
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const robot = robots[this.random.nextInt(robots.length)]!;
+      const taskBlueprint = this.buildTaskBlueprint(robot);
+      if (!taskBlueprint) {
+        continue;
+      }
+
+      const reserved = new Set(blockedPositions.map((position) => this.gridManager.key(position)));
+      const origin = this.pickAvailableCell(reserved);
+      reserved.add(this.gridManager.key(origin));
+      const target = this.pickAvailableCell(reserved);
+
+      if (origin.x === target.x && origin.y === target.y) {
+        continue;
+      }
+
+      const compatibleRobots = robots.filter((candidate) => this.canHandleBlueprint(candidate, taskBlueprint));
+      if (compatibleRobots.length === 0) {
+        continue;
+      }
+
+      return this.prisma.task.create({
+        data: {
+          code: `TASK-${Date.now()}-${Math.floor(this.random.next() * 10000)}`,
+          name: `${taskBlueprint.type.replaceAll("_", " ")} ${origin.x},${origin.y} -> ${target.x},${target.y}`,
+          description: `Tarea automática compatible con ${compatibleRobots.length} robots.`,
+          type: taskBlueprint.type,
+          status: "PENDING",
+          priority: taskBlueprint.priority,
+          executionStage: "TO_ORIGIN",
+          originX: origin.x,
+          originY: origin.y,
+          targetX: target.x,
+          targetY: target.y,
+          loadTypeRequired: taskBlueprint.loadTypeRequired,
+          requiresRefrigeration: taskBlueprint.requiresRefrigeration,
+          requiresFragileHandling: taskBlueprint.requiresFragileHandling,
+          requiredAmount: taskBlueprint.requiredAmount,
+          amountUnit: taskBlueprint.amountUnit,
+          robotId: null
+        }
+      });
+    }
+
+    throw badRequest("No se pudo generar una tarea automática válida para la flota actual.");
+  }
+
+  private buildTaskBlueprint(robot: Robot): {
+    type: Task["type"];
+    priority: TaskPriority;
+    loadTypeRequired: RobotSupportCapability;
+    requiresRefrigeration: boolean;
+    requiresFragileHandling: boolean;
+    requiredAmount: number;
+    amountUnit: CapacityUnit;
+  } | null {
+    const profile: RobotProfile = {
+      supports: robot.supports,
+      capacityUnit: robot.capacityUnit,
+      capacityValue: robot.capacityValue
+    };
+
+    if (!profile.capacityUnit || !profile.capacityValue) {
+      return null;
+    }
+
+    const loadOptions = ["UNIT_LOAD", "BULK_LOAD"].filter((support) =>
+      profile.supports.includes(support as RobotSupportCapability)
+    ) as RobotSupportCapability[];
+
+    if (loadOptions.length === 0) {
+      return null;
+    }
+
+    const loadTypeRequired = loadOptions[this.random.nextInt(loadOptions.length)]!;
+    const requiresFragileHandling = loadTypeRequired === "UNIT_LOAD" && profile.supports.includes("FRAGILE") && this.random.next() > 0.45;
+    const requiresRefrigeration = loadTypeRequired === "UNIT_LOAD" && profile.supports.includes("REFRIGERATED") && this.random.next() > 0.55;
+    const capacityBase = Math.max(1, profile.capacityValue);
+    const requiredAmount = Math.max(1, Math.min(capacityBase, Math.floor(capacityBase * (0.35 + this.random.next() * 0.55))));
+    const priority = this.pickPriority(requiredAmount, capacityBase);
+
+    return {
+      type: this.pickTaskType(loadTypeRequired, requiresRefrigeration, requiresFragileHandling),
+      priority,
+      loadTypeRequired,
+      requiresRefrigeration,
+      requiresFragileHandling,
+      requiredAmount,
+      amountUnit: profile.capacityUnit
+    };
+  }
+
+  private canHandleBlueprint(robot: Robot, blueprint: {
+    loadTypeRequired: RobotSupportCapability;
+    requiresRefrigeration: boolean;
+    requiresFragileHandling: boolean;
+    requiredAmount: number;
+    amountUnit: CapacityUnit;
+  }): boolean {
+    if (!robot.isActive || robot.status === "OFFLINE" || robot.status === "BLOCKED") {
+      return false;
+    }
+
+    if (!robot.supports.includes(blueprint.loadTypeRequired)) {
+      return false;
+    }
+
+    if (blueprint.requiresFragileHandling && !robot.supports.includes("FRAGILE")) {
+      return false;
+    }
+
+    if (blueprint.requiresRefrigeration && !robot.supports.includes("REFRIGERATED")) {
+      return false;
+    }
+
+    if (robot.capacityUnit !== blueprint.amountUnit) {
+      return false;
+    }
+
+    return (robot.capacityValue ?? 0) >= blueprint.requiredAmount;
   }
 
   private pickAvailableCell(reserved: Set<string>): GridPosition {
@@ -108,19 +197,21 @@ export class TaskGeneratorService {
       }
     }
 
-    throw new Error("Unable to generate a non-blocked task position.");
+    throw badRequest("No se encontró una celda libre para generar la tarea automática.");
   }
 
-  private pickPriority(requiredAmount: number): "LOW" | "NORMAL" | "HIGH" | "CRITICAL" {
-    if (requiredAmount >= 150) {
+  private pickPriority(requiredAmount: number, capacityBase: number): TaskPriority {
+    const ratio = requiredAmount / Math.max(1, capacityBase);
+
+    if (ratio >= 0.85) {
       return "CRITICAL";
     }
 
-    if (requiredAmount >= 90) {
+    if (ratio >= 0.65) {
       return "HIGH";
     }
 
-    if (requiredAmount >= 40) {
+    if (ratio >= 0.4) {
       return "NORMAL";
     }
 
@@ -131,7 +222,7 @@ export class TaskGeneratorService {
     loadTypeRequired: RobotSupportCapability,
     requiresRefrigeration: boolean,
     requiresFragileHandling: boolean
-  ): (typeof TASK_TYPES)[number] {
+  ): Task["type"] {
     if (requiresRefrigeration && requiresFragileHandling) {
       return this.pickOne(["MOVE_COLD_PRODUCTS", "MOVE_BOTTLES"]);
     }

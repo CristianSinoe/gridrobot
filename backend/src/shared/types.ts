@@ -1,7 +1,9 @@
 export type RobotStatus = "IDLE" | "MOVING" | "WAITING" | "BLOCKED" | "OFFLINE";
+export type SystemMode = "WAREHOUSE" | "GAME";
 export type TaskStatus =
   | "PENDING"
   | "ASSIGNED"
+  | "ASSIGNED_PENDING_START"
   | "REASSIGNED"
   | "IN_PROGRESS"
   | "WAITING_ASSISTANCE"
@@ -60,6 +62,8 @@ export interface TaskView {
   origin: GridPosition;
   target: GridPosition;
   robotId: string | null;
+  assignedNodeId: string | null;
+  assignedOperatorId: string | null;
   loadTypeRequired: "UNIT_LOAD" | "BULK_LOAD";
   requiresRefrigeration: boolean;
   requiresFragileHandling: boolean;
@@ -77,10 +81,22 @@ export interface TaskRobotCandidateView {
   robotName: string;
   nodeId: string | null;
   distanceToOrigin: number;
+  capacityLabel: string;
+  supports: RobotSupport[];
   availabilityLabel: string;
   reservationLabel: string | null;
   priorityLabel: string | null;
   isAvailable: boolean;
+}
+
+export interface OperatorView {
+  id: string;
+  name: string;
+  username: string;
+  assignedNodeId: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PreviewRouteView {
@@ -108,4 +124,64 @@ export interface WorldSnapshot {
   previewRoutes?: PreviewRouteView[];
 }
 
-export interface WorldBootstrap extends Omit<WorldSnapshot, "tick"> {}
+export type WorldBootstrap = Omit<WorldSnapshot, "tick">;
+
+export type GameStatus = "IDLE" | "RUNNING" | "PAUSED" | "FINISHED";
+export type GameDirection = "UP" | "DOWN" | "LEFT" | "RIGHT";
+export type GameCollectibleType = "POINT" | "BONUS" | "LIFE";
+
+export interface GamePlayer {
+  id: string;
+  name: string;
+  robotId?: string;
+  color: string;
+  position: GridPosition;
+  direction: GameDirection;
+  nextDirection?: GameDirection;
+  score: number;
+  lives: number;
+  alive: boolean;
+  connected: boolean;
+  invulnerableUntil?: number;
+  joinedAt: string;
+}
+
+export interface GameCollectible {
+  id: string;
+  type: GameCollectibleType;
+  position: GridPosition;
+  value: number;
+}
+
+export interface GameObstacle {
+  id: string;
+  position: GridPosition;
+}
+
+export interface GameLeaderboardItem {
+  playerId: string;
+  name: string;
+  color: string;
+  score: number;
+  lives: number;
+  alive: boolean;
+  connected: boolean;
+  joinedAt: string;
+  statusLabel: "Vivo" | "Eliminado" | "Desconectado";
+}
+
+export interface GameGridConfig {
+  width: number;
+  height: number;
+  tickRateHz: number;
+}
+
+export interface GameStateSnapshot {
+  status: GameStatus;
+  grid: GameGridConfig;
+  players: GamePlayer[];
+  collectibles: GameCollectible[];
+  obstacles: GameObstacle[];
+  leaderboard: GameLeaderboardItem[];
+  tick: number;
+}

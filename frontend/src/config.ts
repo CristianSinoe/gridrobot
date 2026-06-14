@@ -1,10 +1,9 @@
-const browserHost =
-  typeof window !== "undefined" ? window.location.hostname : "localhost";
+const rawApiBaseUrl =
+  import.meta.env.VITE_API_BASE_URL?.trim() || import.meta.env.VITE_API_URL?.trim() || "";
+const rawSocketUrl = import.meta.env.VITE_SOCKET_URL?.trim() || "";
 
-const backendProtocol = import.meta.env.VITE_BACKEND_PROTOCOL ?? "http";
-const backendPort = import.meta.env.VITE_BACKEND_PORT ?? "4000";
-
-export const API_URL =
-  import.meta.env.VITE_API_URL ?? `${backendProtocol}://${browserHost}:${backendPort}/api`;
-export const SOCKET_URL =
-  import.meta.env.VITE_SOCKET_URL ?? `${backendProtocol}://${browserHost}:${backendPort}`;
+export const API_URL = rawApiBaseUrl || "/api";
+export const SOCKET_URL = rawSocketUrl || undefined;
+export const SOCKET_PATH = "/socket.io";
+export const GAME_ONLY_REDIRECT =
+  import.meta.env.VITE_GAME_ONLY_REDIRECT?.trim() !== "false";

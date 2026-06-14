@@ -32,6 +32,9 @@ Thumbs.db
 
 .vercel/
 .netlify/
+.specify/
 
 *.tsbuildinfo
+*.zip
+frontend/dist-prebuild-backup-*/
 Análisis Técnico Proyecto GRIDROBOT.pdf

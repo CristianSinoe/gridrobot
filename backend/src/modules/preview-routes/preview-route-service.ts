@@ -124,7 +124,14 @@ export class PreviewRouteService {
       updatedAt: new Date().toISOString()
     };
 
-    if (!task || (task.status !== "ASSIGNED" && task.status !== "REASSIGNED")) {
+    if (
+      !task ||
+      (
+        task.status !== "ASSIGNED_PENDING_START" &&
+        task.status !== "ASSIGNED" &&
+        task.status !== "REASSIGNED"
+      )
+    ) {
       return fallback;
     }
 

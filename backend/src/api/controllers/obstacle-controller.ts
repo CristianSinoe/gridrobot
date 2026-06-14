@@ -6,6 +6,8 @@ import type { SessionAccessService } from "../../modules/central-access/session-
 import type { ObstacleManager } from "../../modules/obstacles/obstacle-manager.js";
 import type { PreviewRouteService } from "../../modules/preview-routes/preview-route-service.js";
 import type { RobotService } from "../../modules/robots/robot-service.js";
+import type { SystemModeService } from "../../modules/system/system-mode-service.js";
+import { assertWarehouseModeForNonAdmin } from "../../modules/system/system-mode-guards.js";
 import type { WorldVisibilityService } from "../../modules/world-visibility/world-visibility-service.js";
 
 const obstacleSchema = z.object({
@@ -19,15 +21,18 @@ export class ObstacleController {
     private readonly robotService: RobotService,
     private readonly worldVisibilityService: WorldVisibilityService,
     private readonly sessionAccessService: SessionAccessService,
-    private readonly previewRouteService: PreviewRouteService
+    private readonly previewRouteService: PreviewRouteService,
+    private readonly systemModeService: SystemModeService
   ) {}
 
-  public list = (_request: Request, response: Response): void => {
+  public list = (request: Request, response: Response): void => {
+    assertWarehouseModeForNonAdmin(request, this.sessionAccessService, this.systemModeService);
     response.json(this.obstacleManager.getAll());
   };
 
   public upsert = async (request: Request, response: Response): Promise<void> => {
     this.assertCentralSession(request);
+    assertWarehouseModeForNonAdmin(request, this.sessionAccessService, this.systemModeService);
     const payload = obstacleSchema.parse(request.body);
     const obstacles = await this.obstacleManager.upsert(payload);
     const changedRobots = await this.robotService.recalculateRoutesForObstacles();
@@ -42,6 +47,7 @@ export class ObstacleController {
 
   public remove = async (request: Request, response: Response): Promise<void> => {
     this.assertCentralSession(request);
+    assertWarehouseModeForNonAdmin(request, this.sessionAccessService, this.systemModeService);
     const payload = obstacleSchema.parse(request.body);
     const obstacles = await this.obstacleManager.remove(payload);
     const changedRobots = await this.robotService.recalculateRoutesForObstacles();

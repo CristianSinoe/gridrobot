@@ -2,10 +2,14 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 
 import { logger } from "../../config/logger.js";
-import { badRequest } from "../../shared/errors.js";
 import type { SessionAccessService } from "../../modules/central-access/session-access-service.js";
 import type { PreviewRouteService } from "../../modules/preview-routes/preview-route-service.js";
 import type { RobotService } from "../../modules/robots/robot-service.js";
+import type { SystemModeService } from "../../modules/system/system-mode-service.js";
+import {
+  assertWarehouseModeForNonAdmin,
+  resolveRequestSession
+} from "../../modules/system/system-mode-guards.js";
 import type { TaskService } from "../../modules/tasks/task-service.js";
 
 const createTaskSchema = z.object({
@@ -26,7 +30,8 @@ export class TaskController {
     private readonly taskService: TaskService,
     private readonly sessionAccessService: SessionAccessService,
     private readonly robotService: RobotService,
-    private readonly previewRouteService: PreviewRouteService
+    private readonly previewRouteService: PreviewRouteService,
+    private readonly systemModeService: SystemModeService
   ) {}
 
   public list = async (request: Request, response: Response): Promise<void> => {
@@ -42,6 +47,7 @@ export class TaskController {
   };
 
   public create = async (request: Request, response: Response): Promise<void> => {
+    assertWarehouseModeForNonAdmin(request, this.sessionAccessService, this.systemModeService);
     const payload = createTaskSchema.parse(request.body);
     const task = await this.taskService.create({
       name: payload.name,
@@ -52,10 +58,16 @@ export class TaskController {
   };
 
   public assign = async (request: Request, response: Response): Promise<void> => {
+    assertWarehouseModeForNonAdmin(request, this.sessionAccessService, this.systemModeService);
     const params = z.object({ taskId: z.string().uuid() }).parse(request.params);
     const payload = assignTaskSchema.parse(request.body);
     const session = this.resolveSession(request);
-    const task = await this.taskService.assign(params.taskId, payload.robotId, session.role === "operator" ? session.nodeId : null);
+    const task = await this.taskService.assign(
+      params.taskId,
+      payload.robotId,
+      session.role === "operator" ? session.nodeId : null,
+      session.role === "operator" ? session.operatorId : null
+    );
     try {
       await this.previewRouteService.upsertPreview(
         params.taskId,
@@ -78,6 +90,7 @@ export class TaskController {
   };
 
   public start = async (request: Request, response: Response): Promise<void> => {
+    assertWarehouseModeForNonAdmin(request, this.sessionAccessService, this.systemModeService);
     const params = z.object({ taskId: z.string().uuid() }).parse(request.params);
     this.resolveSession(request);
     const robotId = this.resolveCentralRobotId(request);
@@ -87,6 +100,7 @@ export class TaskController {
   };
 
   public cancelPreparation = async (request: Request, response: Response): Promise<void> => {
+    assertWarehouseModeForNonAdmin(request, this.sessionAccessService, this.systemModeService);
     const params = z.object({ taskId: z.string().uuid() }).parse(request.params);
     const session = this.resolveSession(request);
     const task = await this.taskService.cancelPreparation(
@@ -98,13 +112,7 @@ export class TaskController {
   };
 
   private resolveSession(request: Request) {
-    const token = request.header("x-session-token");
-    const session = token ? this.sessionAccessService.getSessionByToken(token) : null;
-    if (!session) {
-      throw badRequest("La sesion activa no es valida.");
-    }
-
-    return session;
+    return resolveRequestSession(request, this.sessionAccessService);
   }
   private resolveCentralRobotId(request: Request): string {
     const payload = assignTaskSchema.parse(request.body);

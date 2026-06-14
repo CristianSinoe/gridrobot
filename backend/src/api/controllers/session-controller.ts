@@ -3,13 +3,18 @@ import { z } from "zod";
 
 import { badRequest } from "../../shared/errors.js";
 import type { SessionAccessService } from "../../modules/central-access/session-access-service.js";
+import type { OperatorService } from "../../modules/operators/operator-service.js";
+import type { SystemModeService } from "../../modules/system/system-mode-service.js";
+import { assertWarehouseModeForNonAdmin } from "../../modules/system/system-mode-guards.js";
 
 const centralLoginSchema = z.object({
   password: z.string().min(1)
 });
 
 const operatorLoginSchema = z.object({
-  nodeId: z.enum(["PC-B01", "PC-B02", "PC-B03"])
+  nodeId: z.enum(["PC-B01", "PC-B02", "PC-B03"]),
+  username: z.string().min(1),
+  password: z.string().min(1)
 });
 
 const tokenHeaderSchema = z.object({
@@ -27,7 +32,11 @@ const releaseSessionSchema = z.discriminatedUnion("role", [
 ]);
 
 export class SessionController {
-  public constructor(private readonly sessionAccessService: SessionAccessService) {}
+  public constructor(
+    private readonly sessionAccessService: SessionAccessService,
+    private readonly operatorService: OperatorService,
+    private readonly systemModeService: SystemModeService
+  ) {}
 
   public status = (_request: Request, response: Response): void => {
     this.assertCentralRequest(_request);
@@ -40,9 +49,19 @@ export class SessionController {
     response.status(201).json(session);
   };
 
-  public loginOperator = (request: Request, response: Response): void => {
+  public loginOperator = async (request: Request, response: Response): Promise<void> => {
+    assertWarehouseModeForNonAdmin(request, this.sessionAccessService, this.systemModeService);
     const payload = operatorLoginSchema.parse(request.body);
-    const session = this.sessionAccessService.loginOperator(payload.nodeId, request.ip ?? null);
+    const operator = await this.operatorService.authenticate(
+      payload.nodeId,
+      payload.username,
+      payload.password
+    );
+    const session = this.sessionAccessService.loginOperator(
+      payload.nodeId,
+      operator,
+      request.ip ?? null
+    );
     response.status(201).json(session);
   };
 

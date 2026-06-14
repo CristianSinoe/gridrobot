@@ -25,7 +25,8 @@ export const SessionManagerPanel = ({
         <h2>Sesiones activas</h2>
         <button
           type="button"
-          className="tab"
+          className="tab button-secondary"
+          aria-label="Actualizar sesiones activas"
           onClick={async () => {
             setIsRefreshing(true);
             try {
@@ -45,7 +46,7 @@ export const SessionManagerPanel = ({
             <span className="session-row__icon">▦</span>
             <div>
               <h3>Panel Central</h3>
-              <p>{centralSession ? "Sesion actual activa" : "Sin sesion activa"}</p>
+              <p>{centralSession ? "Sesión actual activa" : "Sin sesión activa"}</p>
             </div>
           </div>
           <div className="session-row__details">
@@ -63,7 +64,7 @@ export const SessionManagerPanel = ({
               <span className="session-row__icon">⌘</span>
               <div>
                 <h3>{session.nodeId}</h3>
-                <p>Sesion secundaria activa</p>
+                <p>{session.operatorUsername ? `Sesión de ${session.operatorUsername}` : "Sesión secundaria activa"}</p>
               </div>
             </div>
             <div className="session-row__details">
@@ -73,7 +74,8 @@ export const SessionManagerPanel = ({
             <div className="session-row__actions">
               <button
                 type="button"
-                className="claim-button"
+                className="claim-button button-danger"
+                aria-label={`Cerrar sesión de ${session.nodeId}`}
                 disabled={!session.nodeId || pendingNodeId === session.nodeId}
                 onClick={async () => {
                   if (!session.nodeId) {
@@ -88,7 +90,7 @@ export const SessionManagerPanel = ({
                   }
                 }}
               >
-                {pendingNodeId === session.nodeId ? "Cerrando..." : "Cerrar sesion"}
+                {pendingNodeId === session.nodeId ? "Cerrando..." : "Cerrar sesión"}
               </button>
             </div>
           </article>

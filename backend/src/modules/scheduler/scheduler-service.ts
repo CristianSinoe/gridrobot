@@ -7,6 +7,7 @@ import type { GridManager } from "../grid/grid-manager.js";
 import type { ObstacleManager } from "../obstacles/obstacle-manager.js";
 import type { TaskService } from "../tasks/task-service.js";
 import type { WorldVisibilityService } from "../world-visibility/world-visibility-service.js";
+import type { SystemModeService } from "../system/system-mode-service.js";
 import {
   buildWorldPayload,
   emitObstaclesToAllViewers,
@@ -15,11 +16,13 @@ import {
   getFocusedRobotIdForSocket
 } from "../websocket/socket-gateway.js";
 import type { PreviewRouteService } from "../preview-routes/preview-route-service.js";
+import type { MqttBridgeService } from "../mqtt/mqtt-bridge-service.js";
 
 export class SchedulerService {
   private timer: NodeJS.Timeout | null = null;
   private tick = 0;
   private isRunningTick = false;
+  private isPaused = false;
 
   public constructor(
     private readonly tickRateHz: number,
@@ -30,7 +33,9 @@ export class SchedulerService {
     private readonly taskService: TaskService,
     private readonly worldVisibilityService: WorldVisibilityService,
     private readonly previewRouteService: PreviewRouteService,
-    private readonly io: SocketIOServer
+    private readonly io: SocketIOServer,
+    private readonly systemModeService: SystemModeService,
+    private readonly mqttBridgeService: MqttBridgeService
   ) {}
 
   public start(): void {
@@ -53,8 +58,16 @@ export class SchedulerService {
     this.timer = null;
   }
 
+  public pause(): void {
+    this.isPaused = true;
+  }
+
+  public resume(): void {
+    this.isPaused = false;
+  }
+
   private async runTick(): Promise<void> {
-    if (this.isRunningTick) {
+    if (this.isRunningTick || this.isPaused || this.systemModeService.isGameMode()) {
       return;
     }
 
@@ -71,7 +84,7 @@ export class SchedulerService {
         worldVisibilityService: this.worldVisibilityService,
         previewRouteService: this.previewRouteService
       };
-      await this.robotService.tick();
+      await this.robotService.tick(this.tickRateHz);
       await this.taskService.handleRobotProgress();
 
       if (
@@ -109,6 +122,14 @@ export class SchedulerService {
       if (this.tick === 1 || this.tick % this.tickRateHz === 0) {
         await this.taskService.ensureAutomaticTasks();
       }
+
+      if (this.tick === 1 || this.tick % (this.tickRateHz * 2) === 0) {
+        this.robotService
+          .getAll()
+          .filter((robot) => robot.isActive && robot.status !== "OFFLINE")
+          .forEach((robot) => this.mqttBridgeService.publishRobotTelemetry(robot.id));
+      }
+
       const discoveries = this.worldVisibilityService.refreshDiscoveries();
 
       for (const socket of this.io.sockets.sockets.values()) {

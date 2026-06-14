@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tríptico GRIDBOT</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="screen-toolbar">
+      <div>
+        <strong>Tríptico GRIDBOT</strong>
+        <span>Formato 27.9 x 21.6 cm</span>
+      </div>
+      <button type="button" onclick="window.print()">Exportar / Imprimir</button>
+    </div>
+
+    <main class="brochure">
+      <section class="sheet sheet--outside">
+        <article class="panel panel--contact">
+          <p class="eyebrow">Tecnologías</p>
+          <h2>Base tecnológica</h2>
+          <ul class="tech-list">
+            <li>React + TypeScript + Vite</li>
+            <li>Node.js + Express</li>
+            <li>PostgreSQL + Prisma</li>
+            <li>Socket.IO en tiempo real</li>
+            <li>MQTT para eventos del entorno</li>
+            <li>Docker + Nginx para demo LAN</li>
+          </ul>
+          <div class="mini-faq">
+            <h3>FAQ breve</h3>
+            <p><strong>¿Qué es GRIDBOT?</strong> Un simulador logístico de robots móviles.</p>
+            <p><strong>¿Opera en red local?</strong> Sí, con acceso de demo para varios dispositivos.</p>
+            <p><strong>¿Los robots tienen diferencias?</strong> Sí, por capacidad, velocidad y tipo de carga.</p>
+          </div>
+        </article>
+
+        <article class="panel panel--backcover">
+          <p class="eyebrow">Proyecto universitario</p>
+          <h2>GRIDBOT / GRIDROBOT</h2>
+          <p class="lead">
+            Plataforma de simulación y supervisión de robots móviles para operación logística en almacenes.
+          </p>
+          <div class="highlight-box">
+            <span class="stat-label">Diferenciadores</span>
+            <ul>
+              <li>Panel central y operadores</li>
+              <li>Rutas previas con conflictos visibles</li>
+              <li>Obstáculos y recalculo dinámico</li>
+              <li>Despliegue en red local</li>
+            </ul>
+          </div>
+          <div class="footer-note">
+            <p>Uso sugerido: exposición universitaria, demostración técnica y simulación académica.</p>
+          </div>
+        </article>
+
+        <article class="panel panel--cover">
+          <div class="cover-badge">Automatización logística</div>
+          <p class="eyebrow">Sistema de supervisión y simulación</p>
+          <h1>GRIDBOT</h1>
+          <p class="cover-slogan">Coordinación inteligente para la logística robotizada.</p>
+          <p class="lead">
+            Simulación visual en tiempo real para asignar tareas, coordinar robots, planificar rutas y responder a obstáculos dentro de un entorno de almacén.
+          </p>
+          <div class="cover-grid">
+            <div class="cover-chip">Robots</div>
+            <div class="cover-chip">Rutas</div>
+            <div class="cover-chip">Tareas</div>
+            <div class="cover-chip">Operadores</div>
+          </div>
+        </article>
+      </section>
+
+      <section class="sheet sheet--inside">
+        <article class="panel panel--inside">
+          <p class="eyebrow">Problema</p>
+          <h2>¿Qué necesidad atiende?</h2>
+          <p>
+            En un almacén con varios robots móviles no basta con mover cargas de un punto a otro. Es necesario decidir qué robot puede ejecutar cada tarea, qué ruta debe seguir, cómo evitar bloqueos, qué hacer si aparece un obstáculo y cómo coordinar la operación entre distintos actores.
+          </p>
+          <p>
+            GRIDBOT representa ese problema mediante un entorno en cuadrícula donde conviven tareas, rutas, cruces, restricciones de carga y supervisión distribuida.
+          </p>
+        </article>
+
+        <article class="panel panel--inside panel--accent">
+          <p class="eyebrow">Solución</p>
+          <h2>¿Cómo responde el sistema?</h2>
+          <ul class="feature-list">
+            <li>Panel central con visión global del entorno.</li>
+            <li>Operadores por nodo para preparar e iniciar viajes.</li>
+            <li>Selección de robots compatibles por capacidad y tipo de carga.</li>
+            <li>Rutas previas antes del inicio del viaje.</li>
+            <li>Detección visual de conflictos y cruces.</li>
+            <li>Obstáculos que modifican la operación y recalculan trayectorias.</li>
+            <li>Comunicación en tiempo real para mantener sincronizadas las vistas.</li>
+          </ul>
+        </article>
+
+        <article class="panel panel--inside">
+          <p class="eyebrow">Funcionalidades</p>
+          <h2>Lo que hoy puede hacer GRIDBOT</h2>
+          <div class="columns">
+            <div>
+              <h3>Panel central</h3>
+              <ul>
+                <li>Gestionar robots y operadores.</li>
+                <li>Ver mapa, tareas, obstáculos y sesiones.</li>
+                <li>Cambiar modo del sistema.</li>
+              </ul>
+            </div>
+            <div>
+              <h3>Operador</h3>
+              <ul>
+                <li>Seleccionar tareas activas.</li>
+                <li>Elegir robots aptos y disponibles.</li>
+                <li>Preparar e iniciar manualmente el viaje.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="columns">
+            <div>
+              <h3>Simulación</h3>
+              <ul>
+                <li>Mapa de almacén en cuadrícula.</li>
+                <li>Robots con capacidades distintas.</li>
+                <li>Rutas previas y conflicto entre trayectorias.</li>
+              </ul>
+            </div>
+            <div>
+              <h3>Infraestructura</h3>
+              <ul>
+                <li>Persistencia en PostgreSQL.</li>
+                <li>Tiempo real con Socket.IO.</li>
+                <li>Modo demo en red local.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

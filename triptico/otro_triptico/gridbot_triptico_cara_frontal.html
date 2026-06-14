@@ -1,0 +1,339 @@
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  .wrap {
+    width: 1056px; height: 816px;
+    display: flex;
+    background: #f4f6fb;
+    font-family: 'Exo 2', sans-serif;
+    border: 1px solid #d0d8e8;
+  }
+  .panel {
+    flex: 1;
+    padding: 26px 20px;
+    position: relative;
+    border-right: 1px solid #d0d8e8;
+    overflow: hidden;
+    background: #ffffff;
+  }
+  .panel:last-child { border-right: none; }
+  .panel.p1 { background: #f0f4ff; }
+  .panel.p5 { background: #ffffff; }
+  .panel.p6 { background: #f0f4ff; }
+
+  .grid-bg {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(30,100,220,0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(30,100,220,0.07) 1px, transparent 1px);
+    background-size: 28px 28px;
+    z-index: 0;
+  }
+  .panel > * { position: relative; z-index: 1; }
+
+  .corner-accent {
+    position: absolute; width: 50px; height: 50px;
+    border-color: #1e64dc; border-style: solid; z-index: 2;
+  }
+  .ca-tl { top: 10px; left: 10px; border-width: 2px 0 0 2px; }
+  .ca-br { bottom: 10px; right: 10px; border-width: 0 2px 2px 0; }
+
+  .brand-name {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900;
+    color: #1e64dc;
+    text-align: center;
+    margin-bottom: 2px;
+  }
+  .brand-sub {
+    font-family: 'Orbitron', monospace;
+    color: #6a90c8;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  .panel.p1 .brand-name {
+    font-size: 42px;
+    letter-spacing: 4px;
+    line-height: 1;
+    margin: 8px 0 2px;
+  }
+  .panel.p1 .brand-sub {
+    font-size: 9px;
+    letter-spacing: 5px;
+  }
+  .panel.p6 .brand-name {
+    font-size: 27px;
+    letter-spacing: 3px;
+  }
+  .panel.p6 .brand-sub {
+    font-size: 8.5px;
+    letter-spacing: 4px;
+    margin-bottom: 12px;
+  }
+
+  .slogan {
+    font-size: 13.5px; color: #2a5aaa;
+    text-align: center; line-height: 1.5;
+    border-top: 1px solid #c0d0ea;
+    border-bottom: 1px solid #c0d0ea;
+    padding: 7px 4px; letter-spacing: 0.3px;
+    margin-bottom: 10px;
+  }
+  .grid-visual { width: 100%; height: 230px; position: relative; margin-bottom: 10px; }
+
+  .sec-label {
+    font-family: 'Orbitron', monospace; font-size: 9.5px;
+    letter-spacing: 3.5px; color: #1e64dc;
+    border-left: 2.5px solid #1e64dc;
+    padding-left: 7px; margin-bottom: 5px;
+  }
+  .sec-title {
+    font-family: 'Orbitron', monospace; font-size: 20px; font-weight: 700;
+    color: #0a2050; margin-bottom: 9px; line-height: 1.3;
+  }
+  .divider { border: none; border-top: 1px solid #dde6f0; margin: 10px 0; }
+
+  .faq-item {
+    margin-bottom: 10px;
+    border-left: 2px solid #aac0ee;
+    padding-left: 8px;
+  }
+  .faq-q { font-size: 12.5px; font-weight: 600; color: #1e4eaa; margin-bottom: 3px; line-height: 1.34; }
+  .faq-a { font-size: 11.1px; color: #5a7898; line-height: 1.48; }
+
+  .status-bar {
+    display: flex; align-items: center; gap: 7px;
+    background: #e8feef; border: 1px solid #8ad0aa;
+    border-radius: 3px; padding: 6px 9px; margin-bottom: 7px;
+  }
+  .status-led { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .led-green { background: #1a9060; }
+  .led-purple { background: #6040cc; }
+  .status-txt { font-size: 9.5px; color: #0a6040; font-family: 'Orbitron', monospace; letter-spacing: 1px; }
+  .status-bar.purple { background: #ede8fe; border-color: #9080ee; }
+  .status-bar.purple .status-txt { color: #4030aa; }
+
+  .team-block {
+    background: #f4f7fc; border: 1px solid #cdd9ee;
+    border-radius: 3px; padding: 9px 11px; margin-top: 9px;
+  }
+  .team-label { font-family: 'Orbitron', monospace; font-size: 8px; color: #6a90c8; letter-spacing: 3px; margin-bottom: 7px; }
+  .team-field {
+    display: flex; justify-content: space-between;
+    margin-bottom: 5px; border-bottom: 1px solid #dde6f0; padding-bottom: 4px;
+  }
+  .tf-key { font-size: 9.5px; color: #7a9ab8; }
+  .tf-val { font-size: 9.5px; color: #aac0d8; font-style: italic; }
+
+  .tag-pill {
+    display: inline-block;
+    background: #e8f0fe; border: 1px solid #aac0f0;
+    color: #1e4eaa; font-size: 9px; letter-spacing: 1.35px;
+    padding: 3px 7px; border-radius: 2px;
+    font-family: 'Orbitron', monospace; margin: 2px;
+  }
+  .tags-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; margin-bottom: 8px; }
+  .version-badge { text-align: center; font-size: 9px; color: #9ab0cc; letter-spacing: 1px; margin-top: 6px; }
+
+  .brand-mark {
+    display: block;
+    width: 92px;
+    height: auto;
+    margin: 0 auto 8px;
+    object-fit: contain;
+  }
+
+  .btm { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: #1e64dc; opacity: 0.18; }
+  .btm-accent { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: #1e64dc; }
+</style>
+
+<div class="wrap">
+  <div class="panel p6">
+    <div class="grid-bg"></div>
+    <div class="corner-accent ca-tl"></div>
+    <div class="corner-accent ca-br"></div>
+
+    <div style="text-align:center; margin-bottom:12px;">
+      <svg width="64" height="64" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block; margin: 0 auto 6px;">
+        <rect x="22" y="28" width="36" height="30" rx="4" fill="none" stroke="#1e64dc" stroke-width="2"/>
+        <rect x="29" y="33" width="9" height="7" rx="2" fill="#1e64dc" opacity="0.5"/>
+        <rect x="42" y="33" width="9" height="7" rx="2" fill="#1e64dc" opacity="0.5"/>
+        <rect x="31" y="45" width="18" height="3.5" rx="1.5" fill="#1e64dc" opacity="0.3"/>
+        <rect x="33" y="18" width="14" height="10" rx="2" fill="none" stroke="#1e64dc" stroke-width="1.5"/>
+        <line x1="40" y1="18" x2="40" y2="28" stroke="#1e64dc" stroke-width="1.5"/>
+        <rect x="37" y="14" width="7" height="5" rx="1.5" fill="#1e64dc" opacity="0.4"/>
+        <rect x="12" y="33" width="10" height="16" rx="3" fill="none" stroke="#1e64dc" stroke-width="1.5"/>
+        <rect x="58" y="33" width="10" height="16" rx="3" fill="none" stroke="#1e64dc" stroke-width="1.5"/>
+        <rect x="28" y="58" width="8" height="12" rx="3" fill="none" stroke="#1e64dc" stroke-width="1.5"/>
+        <rect x="44" y="58" width="8" height="12" rx="3" fill="none" stroke="#1e64dc" stroke-width="1.5"/>
+      </svg>
+      <div class="brand-name">GRIDBOT</div>
+      <div class="brand-sub">ROBOTIC LOGISTICS SYSTEM</div>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-led led-green"></div>
+      <span class="status-txt">SYSTEM STATUS: OPERATIONAL</span>
+    </div>
+    <div class="status-bar purple">
+      <div class="status-led led-purple"></div>
+      <span class="status-txt">DEMO LAN: AVAILABLE</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <div style="text-align:center; margin-bottom: 8px;">
+      <img class="brand-mark" src="./isof.png" alt="Logotipo ISOF" />
+    </div>
+
+    <div class="team-block">
+      <div class="team-label">INFORMACIÓN DEL EQUIPO</div>
+      <div class="team-field"><span class="tf-key">Institución</span><span class="tf-val">Universidad Veracruzana</span></div>
+      <div class="team-field"><span class="tf-key">Facultad</span><span class="tf-val">Facultad de Negocios y Tecnologías</span></div>
+      <div class="team-field"><span class="tf-key">Programa</span><span class="tf-val">Lic. en Ingeniería de Software</span></div>
+      <div class="team-field"><span class="tf-key">Experiencia educativa</span><span class="tf-val">Desarrollo de Sistemas en Red</span></div>
+      <div class="team-field"><span class="tf-key">Catedrático</span><span class="tf-val">Mtro. Jorge Gonzales Díaz</span></div>
+      <div class="team-field"><span class="tf-key">Integrantes</span><span class="tf-val">Alison M. García Lorenzo</span></div>
+      <div class="team-field"><span class="tf-key"></span><span class="tf-val">Ángel Uriel Nieto Rascón</span></div>
+      <div class="team-field"><span class="tf-key"></span><span class="tf-val">Yatana Quetzalli Roa Moreno</span></div>
+      <div style="display:flex; justify-content:space-between;">
+        <span class="tf-key"></span><span class="tf-val">Cristian Sinoe Hernández Ruiz</span>
+      </div>
+    </div>
+
+    <div class="tags-row" style="margin-top:10px;">
+      <span class="tag-pill">LOGÍSTICA</span>
+      <span class="tag-pill">AUTOMATIZACIÓN</span>
+      <span class="tag-pill">TIEMPO REAL</span>
+    </div>
+
+    <div style="position:absolute; bottom:16px; left:0; right:0; text-align:center;">
+      <div style="font-family:'Orbitron',monospace; font-size:7px; color:#9ab8d8; letter-spacing:2px;">GRIDBOT · ROBOTIC LOGISTICS SYSTEM · 2025</div>
+    </div>
+
+    <div class="btm-accent"></div>
+  </div>
+
+  <div class="panel p5">
+    <div class="sec-label">Preguntas frecuentes</div>
+    <div class="sec-title">FAQ rápido</div>
+
+    <div class="faq-item">
+      <div class="faq-q">¿Qué es GRIDBOT?</div>
+      <div class="faq-a">Sistema de simulación y supervisión de robots móviles en un entorno tipo almacén coordinado en tiempo real.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Los robots son reales?</div>
+      <div class="faq-a">Actualmente opera como simulador visual y operativo. La integración con hardware físico está pendiente.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Qué puede hacer el administrador?</div>
+      <div class="faq-a">Ver el mapa completo, gestionar robots y operadores, revisar sesiones y controlar modos del sistema.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Cómo se asigna un robot a una tarea?</div>
+      <div class="faq-a">El sistema filtra automáticamente por disponibilidad, capacidad, tipo de carga y restricciones especiales.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿La tarea inicia al elegir el robot?</div>
+      <div class="faq-a">No. Queda en preparación y solo inicia cuando el operador pulsa "Iniciar viaje" manualmente.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Qué pasa si hay un obstáculo?</div>
+      <div class="faq-a">Las rutas se recalculan automáticamente y el sistema actualiza la operación en tiempo real.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Se pueden ver conflictos entre rutas?</div>
+      <div class="faq-a">Sí. El sistema visualiza rutas previas coloreadas por nodo y detecta cruces de trayectoria.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Se puede usar desde varios dispositivos?</div>
+      <div class="faq-a">Sí. Cuenta con configuración para operar en red local LAN con acceso público controlado.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿El sistema guarda información?</div>
+      <div class="faq-a">Sí. Robots, tareas, operadores, obstáculos y mapas se almacenan en PostgreSQL.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Cuál es el objetivo académico?</div>
+      <div class="faq-a">Modelar operación robotizada y demostrar conceptos de automatización, tiempo real y arquitectura distribuida.</div>
+    </div>
+
+    <div class="btm"></div>
+  </div>
+
+  <div class="panel p1">
+    <div class="grid-bg"></div>
+    <div class="corner-accent ca-tl"></div>
+    <div class="corner-accent ca-br"></div>
+
+    <div style="text-align:center; margin-top:10px; margin-bottom:6px;">
+      <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="22" y="28" width="36" height="30" rx="4" fill="none" stroke="#1e64dc" stroke-width="2"/>
+        <rect x="29" y="33" width="9" height="7" rx="2" fill="#1e64dc" opacity="0.6"/>
+        <rect x="42" y="33" width="9" height="7" rx="2" fill="#1e64dc" opacity="0.6"/>
+        <rect x="31" y="45" width="18" height="3.5" rx="1.5" fill="#1e64dc" opacity="0.35"/>
+        <rect x="33" y="18" width="14" height="10" rx="2" fill="none" stroke="#1e64dc" stroke-width="1.5"/>
+        <line x1="40" y1="18" x2="40" y2="28" stroke="#1e64dc" stroke-width="1.5"/>
+        <rect x="37" y="14" width="7" height="5" rx="1.5" fill="#1e64dc" opacity="0.5"/>
+        <rect x="12" y="33" width="10" height="16" rx="3" fill="none" stroke="#1e64dc" stroke-width="1.5"/>
+        <rect x="58" y="33" width="10" height="16" rx="3" fill="none" stroke="#1e64dc" stroke-width="1.5"/>
+        <rect x="28" y="58" width="8" height="12" rx="3" fill="none" stroke="#1e64dc" stroke-width="1.5"/>
+        <rect x="44" y="58" width="8" height="12" rx="3" fill="none" stroke="#1e64dc" stroke-width="1.5"/>
+        <circle cx="40" cy="40" r="26" stroke="#1e64dc" stroke-width="0.6" stroke-dasharray="4 5" opacity="0.25"/>
+      </svg>
+    </div>
+
+    <div class="brand-name">GRIDBOT</div>
+    <div class="brand-sub">ROBOTIC LOGISTICS SYSTEM</div>
+
+    <div class="slogan">
+      Coordinación inteligente para<br>la logística robotizada
+    </div>
+
+    <div class="grid-visual">
+      <svg width="100%" height="230" viewBox="0 0 310 230" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="sg" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(30,100,220,0.1)" stroke-width="0.6"/>
+          </pattern>
+        </defs>
+        <rect width="310" height="230" fill="url(#sg)"/>
+        <rect x="8" y="8" width="55" height="38" rx="2" fill="#e8f0fe" stroke="#1e64dc" stroke-width="1" opacity="0.7"/>
+        <text x="35" y="31" fill="#1e4eaa" font-size="7.5" text-anchor="middle" font-family="Orbitron,monospace">ZONA A</text>
+        <rect x="247" y="8" width="55" height="38" rx="2" fill="#ede8fe" stroke="#6040cc" stroke-width="1" opacity="0.7"/>
+        <text x="274" y="31" fill="#4030aa" font-size="7.5" text-anchor="middle" font-family="Orbitron,monospace">ZONA B</text>
+        <rect x="8" y="184" width="55" height="38" rx="2" fill="#e8feef" stroke="#1a9060" stroke-width="1" opacity="0.7"/>
+        <text x="35" y="207" fill="#0a6040" font-size="7.5" text-anchor="middle" font-family="Orbitron,monospace">ZONA C</text>
+        <rect x="247" y="184" width="55" height="38" rx="2" fill="#fef3e0" stroke="#c07010" stroke-width="1" opacity="0.7"/>
+        <text x="274" y="207" fill="#804808" font-size="7.5" text-anchor="middle" font-family="Orbitron,monospace">ZONA D</text>
+        <rect x="98" y="76" width="18" height="18" rx="1" fill="#fde8e8" stroke="#d04040" stroke-width="1"/>
+        <text x="107" y="89" fill="#c03030" font-size="8" text-anchor="middle">✕</text>
+        <rect x="178" y="116" width="18" height="18" rx="1" fill="#fde8e8" stroke="#d04040" stroke-width="1"/>
+        <text x="187" y="129" fill="#c03030" font-size="8" text-anchor="middle">✕</text>
+        <path d="M 35 27 L 35 130 L 120 130 L 196 130 L 196 27 L 274 27" stroke="#1e64dc" stroke-width="1.5" fill="none" stroke-dasharray="4 3" opacity="0.5"/>
+        <circle cx="35" cy="27" r="9" fill="#dce8fc" stroke="#1e64dc" stroke-width="1.5"/>
+        <text x="35" y="31" fill="#1e4eaa" font-size="7" text-anchor="middle" font-family="Orbitron,monospace">R1</text>
+        <path d="M 35 203 L 148 203 L 148 155 L 274 155 L 274 203" stroke="#6040cc" stroke-width="1.5" fill="none" stroke-dasharray="4 3" opacity="0.5"/>
+        <circle cx="148" cy="203" r="9" fill="#ede8fe" stroke="#6040cc" stroke-width="1.5"/>
+        <text x="148" y="207" fill="#4030aa" font-size="7" text-anchor="middle" font-family="Orbitron,monospace">R2</text>
+        <path d="M 274 203 L 274 95 L 158 95 L 35 95" stroke="#1a9060" stroke-width="1.5" fill="none" stroke-dasharray="4 3" opacity="0.4"/>
+        <circle cx="158" cy="95" r="9" fill="#e8feef" stroke="#1a9060" stroke-width="1.5"/>
+        <text x="158" y="99" fill="#0a6040" font-size="7" text-anchor="middle" font-family="Orbitron,monospace">R3</text>
+        <circle cx="148" cy="130" r="8" fill="#fde8e8" stroke="#d04040" stroke-width="1" stroke-dasharray="2 2"/>
+        <text x="148" y="134" fill="#c03030" font-size="8" text-anchor="middle" font-weight="bold">!</text>
+        <rect x="115" y="95" width="58" height="38" rx="3" fill="#e8f0fe" stroke="#1e64dc" stroke-width="1"/>
+        <text x="144" y="112" fill="#0a2a6a" font-size="7" text-anchor="middle" font-family="Orbitron,monospace">CENTRAL</text>
+        <text x="144" y="124" fill="#4a70aa" font-size="7" text-anchor="middle" font-family="Orbitron,monospace">PANEL</text>
+      </svg>
+    </div>
+
+    <div class="tags-row">
+      <span class="tag-pill">TIEMPO REAL</span>
+      <span class="tag-pill">MULTI-ROL</span>
+      <span class="tag-pill">PATHFINDING</span>
+    </div>
+    <div class="version-badge">SYS_VER 1.0 · EXPO 2025 · GRIDBOT</div>
+    <div class="btm-accent"></div>
+  </div>
+</div>

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Triptico GRIDBOT · Version final</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="screen-toolbar">
+      <div>
+        <strong>Triptico GRIDBOT · Version final</strong>
+        <span>Formato 27.9 x 21.6 cm · vista unificada lista para exportar</span>
+      </div>
+      <div class="toolbar-actions">
+        <a href="./gridbot_triptico_cara_frontal.html" target="_blank" rel="noreferrer">Abrir frontal</a>
+        <a href="./gridbot_triptico_cara_trasera.html" target="_blank" rel="noreferrer">Abrir trasera</a>
+        <button type="button" onclick="window.print()">Exportar / Imprimir</button>
+      </div>
+    </header>
+
+    <main class="preview-stack">
+      <section class="sheet-block">
+        <div class="sheet-meta">
+          <p class="eyebrow">Cara 1</p>
+          <h1>Vista frontal</h1>
+          <p>Informacion del equipo, preguntas frecuentes y portada del triptico.</p>
+        </div>
+        <div class="sheet-frame">
+          <iframe
+            class="triptico-frame"
+            title="Triptico GRIDBOT cara frontal"
+            src="./gridbot_triptico_cara_frontal.html"
+            loading="eager"
+            scrolling="no"
+          ></iframe>
+        </div>
+      </section>
+
+      <section class="sheet-block">
+        <div class="sheet-meta">
+          <p class="eyebrow">Cara 2</p>
+          <h2>Vista trasera</h2>
+          <p>Que es GRIDBOT, tecnologias, diferenciadores y funcionalidades principales.</p>
+        </div>
+        <div class="sheet-frame">
+          <iframe
+            class="triptico-frame"
+            title="Triptico GRIDBOT cara trasera"
+            src="./gridbot_triptico_cara_trasera.html"
+            loading="eager"
+            scrolling="no"
+          ></iframe>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const syncFrameView = (frame) => {
+        const doc = frame.contentDocument;
+        if (!doc) return;
+
+        const html = doc.documentElement;
+        const body = doc.body;
+
+        if (html) {
+          html.style.margin = "0";
+          html.style.padding = "0";
+          html.style.overflow = "hidden";
+          html.style.width = "1056px";
+          html.style.height = "816px";
+          html.style.background = "#ffffff";
+        }
+
+        if (body) {
+          body.style.margin = "0";
+          body.style.padding = "0";
+          body.style.overflow = "hidden";
+          body.style.width = "1056px";
+          body.style.height = "816px";
+          body.style.background = "#ffffff";
+        }
+      };
+
+      document.querySelectorAll(".triptico-frame").forEach((frame) => {
+        frame.addEventListener("load", () => syncFrameView(frame));
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,47 @@
+FROM node:22-bookworm-slim AS builder
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY backend/package.json backend/package-lock.json ./backend/
+COPY frontend/package.json frontend/package-lock.json ./frontend/
+COPY packages/simulation-engine/package.json ./packages/simulation-engine/
+
+RUN npm ci
+
+COPY backend ./backend
+COPY database ./database
+COPY packages ./packages
+
+RUN npm --workspace @gridrobot/backend run prisma:generate
+RUN npm --workspace @gridrobot/backend run build
+
+FROM node:22-bookworm-slim AS runtime
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=4000
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/backend/package.json ./backend/package.json
+COPY --from=builder /app/backend/dist ./backend/dist
+COPY --from=builder /app/database ./database
+COPY docker/backend/entrypoint.prod.sh /usr/local/bin/gridbot-backend-entrypoint.sh
+
+RUN chmod +x /usr/local/bin/gridbot-backend-entrypoint.sh
+
+WORKDIR /app/backend
+
+EXPOSE 4000
+
+CMD ["gridbot-backend-entrypoint.sh"]

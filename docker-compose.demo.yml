@@ -1,0 +1,147 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gridrobot-postgres-demo
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gridrobot}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_demo_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-gridrobot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gridrobot-demo
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: gridrobot-mqtt-demo
+    restart: unless-stopped
+    volumes:
+      - ./docker/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_demo_data:/mosquitto/data
+      - mosquitto_demo_log:/mosquitto/log
+    networks:
+      - gridrobot-demo
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: gridrobot-backend-demo
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    working_dir: /app/backend
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DEMO_MODE: "true"
+      TRUST_PROXY: "true"
+      PUBLIC_HOST_IP: ${PUBLIC_HOST_IP:-192.168.100.12}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://10.42.0.1}
+      FRONTEND_PORT: 4173
+      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      ALLOW_PRIVATE_NETWORK_ORIGINS: ${ALLOW_PRIVATE_NETWORK_ORIGINS:-true}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      LOGIN_RATE_LIMIT_MAX: ${LOGIN_RATE_LIMIT_MAX:-10}
+      SOCKET_MAX_CONNECTIONS_PER_IP: ${SOCKET_MAX_CONNECTIONS_PER_IP:-3}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-gridrobot}?schema=public
+      MQTT_URL: mqtt://mqtt:1883
+      MQTT_INTERNAL_SIMULATOR_ENABLED: ${MQTT_INTERNAL_SIMULATOR_ENABLED:-true}
+      TICK_RATE_HZ: ${GRIDROBOT_TICK_RATE_HZ:-20}
+      CENTRAL_DASHBOARD_PASSWORD: ${CENTRAL_DASHBOARD_PASSWORD:-gridrobot_admin_2026}
+    command: >
+      sh -c "npx prisma db push --schema /app/database/prisma/schema.prisma &&
+      npx prisma generate --schema /app/database/prisma/schema.prisma &&
+      npm run dev"
+    volumes:
+      - ./backend:/app/backend
+      - ./database:/app/database
+      - ./packages:/app/packages
+      - ./node_modules:/app/node_modules
+    networks:
+      - gridrobot-demo
+
+  mqtt-emulator:
+    profiles: ["mqtt-emulator"]
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: gridrobot-mqtt-emulator-demo
+    restart: unless-stopped
+    depends_on:
+      mqtt:
+        condition: service_started
+    working_dir: /app/backend
+    environment:
+      MQTT_URL: mqtt://mqtt:1883
+    command: >
+      sh -c "npm install &&
+      npm run emulator:mqtt"
+    volumes:
+      - ./backend:/app/backend
+      - ./database:/app/database
+      - ./packages:/app/packages
+      - ./node_modules:/app/node_modules
+    networks:
+      - gridrobot-demo
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: gridrobot-frontend-demo
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    working_dir: /app/frontend
+    environment:
+      VITE_API_BASE_URL: ""
+      VITE_SOCKET_URL: ""
+      VITE_GAME_ONLY_REDIRECT: ${GAME_ONLY_REDIRECT:-true}
+      VITE_DEV_PROXY_TARGET: http://backend:4000
+    command: >
+      sh -c "npm run build &&
+      npm run preview -- --host 0.0.0.0 --port 4173"
+    volumes:
+      - ./frontend:/app/frontend
+      - ./node_modules:/app/node_modules
+      - ./frontend/node_modules:/app/frontend/node_modules
+    networks:
+      - gridrobot-demo
+
+  proxy:
+    image: nginx:1.27-alpine
+    container_name: gridrobot-proxy-demo
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_started
+    ports:
+      - "${PROXY_PORT:-80}:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - gridrobot-demo
+
+networks:
+  gridrobot-demo:
+    driver: bridge
+
+volumes:
+  postgres_demo_data:
+  mosquitto_demo_data:
+  mosquitto_demo_log:

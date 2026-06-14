@@ -1,24 +1,25 @@
 import crypto from "node:crypto";
 
 import { badRequest } from "../../shared/errors.js";
-import { FIXED_RUNTIME_ASSIGNMENTS } from "../robots/robot-catalog.js";
+import type { OperatorView } from "../../shared/types.js";
+import { OPERATOR_NODE_CODES, type OperatorNodeCode as RobotCatalogOperatorNodeCode } from "../robots/robot-catalog.js";
 
 export type SessionRole = "central" | "operator";
-export type OperatorNodeCode = typeof FIXED_RUNTIME_ASSIGNMENTS[number]["nodeCode"];
+export type OperatorNodeCode = RobotCatalogOperatorNodeCode;
 
 export interface ActiveSession {
   token: string;
   role: SessionRole;
   nodeId: OperatorNodeCode | null;
+  operatorId: string | null;
+  operatorUsername: string | null;
   socketId: string | null;
   connectedAt: string;
   clientIp: string | null;
   reservedAt: number;
 }
 
-const VALID_OPERATOR_NODES = new Set<OperatorNodeCode>(
-  FIXED_RUNTIME_ASSIGNMENTS.map((entry) => entry.nodeCode)
-);
+const VALID_OPERATOR_NODES = new Set<OperatorNodeCode>(OPERATOR_NODE_CODES);
 
 export class SessionAccessService {
   private readonly sessions = new Map<string, ActiveSession>();
@@ -37,12 +38,22 @@ export class SessionAccessService {
     return this.reserveSession("central", null, clientIp);
   }
 
-  public loginOperator(nodeId: string, clientIp: string | null): ActiveSession {
+  public loginOperator(
+    nodeId: string,
+    operator: Pick<OperatorView, "id" | "username">,
+    clientIp: string | null
+  ): ActiveSession {
     if (!VALID_OPERATOR_NODES.has(nodeId as OperatorNodeCode)) {
       throw badRequest("El nodo secundario seleccionado no es valido.");
     }
 
-    return this.reserveSession("operator", nodeId as OperatorNodeCode, clientIp);
+    return this.reserveSession(
+      "operator",
+      nodeId as OperatorNodeCode,
+      clientIp,
+      operator.id,
+      operator.username
+    );
   }
 
   public attachSocket(token: string, socketId: string, clientIp: string | null): ActiveSession | null {
@@ -110,6 +121,8 @@ export class SessionAccessService {
       socketId: session.socketId,
       role: session.role,
       nodeId: session.nodeId,
+      operatorId: session.operatorId,
+      operatorUsername: session.operatorUsername,
       connectedAt: session.connectedAt,
       clientIp: session.clientIp
     }));
@@ -118,7 +131,9 @@ export class SessionAccessService {
   private reserveSession(
     role: SessionRole,
     nodeId: OperatorNodeCode | null,
-    clientIp: string | null
+    clientIp: string | null,
+    operatorId: string | null = null,
+    operatorUsername: string | null = null
   ): ActiveSession {
     this.pruneExpiredReservations();
 
@@ -135,6 +150,8 @@ export class SessionAccessService {
       token: crypto.randomUUID(),
       role,
       nodeId,
+      operatorId,
+      operatorUsername,
       socketId: null,
       connectedAt: new Date().toISOString(),
       clientIp,

@@ -1,9 +1,5 @@
-FROM node:22-alpine
+FROM node:22-bookworm-slim
 
 WORKDIR /app/frontend
-
-COPY frontend/package*.json ./
-
-RUN npm install
 
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]

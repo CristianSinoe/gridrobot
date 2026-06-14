@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "../lib/api";
 import { socket } from "../lib/socket";
 import type {
+  EventLogEntry,
   GridPosition,
   LogEntry,
+  NetworkStatusSnapshot,
   PreviewRoute,
   RobotState,
   Task,
@@ -23,18 +25,24 @@ interface State {
   previewRoutes: PreviewRoute[];
   logs: LogEntry[];
   connectionState: "connecting" | "connected" | "disconnected";
+  mqttConnectionState: "connected" | "reconnecting" | "disconnected";
+  historyEvents: EventLogEntry[];
+  networkEvents: EventLogEntry[];
 }
 
 const initialState: State = {
   width: 40,
-  height: 25,
+  height: 40,
   tick: 0,
   robots: [],
   obstacles: [],
   tasks: [],
   previewRoutes: [],
   logs: [],
-  connectionState: "connecting"
+  connectionState: "connecting",
+  mqttConnectionState: "disconnected",
+  historyEvents: [],
+  networkEvents: []
 };
 
 const pushLog = (entries: LogEntry[], level: LogEntry["level"], message: string): LogEntry[] => {
@@ -57,7 +65,7 @@ export const useGridRobotState = (
   const [state, setState] = useState<State>(initialState);
   const [hasHandledInvalidSession, setHasHandledInvalidSession] = useState(false);
 
-  const handleSessionError = (error: unknown) => {
+  const handleSessionError = useCallback((error: unknown) => {
     if (
       !hasHandledInvalidSession &&
       error instanceof Error &&
@@ -66,7 +74,7 @@ export const useGridRobotState = (
       setHasHandledInvalidSession(true);
       onSessionInvalid?.();
     }
-  };
+  }, [hasHandledInvalidSession, onSessionInvalid]);
 
   const refreshTasks = async (robotId?: string) => {
     if (!sessionToken) {
@@ -83,7 +91,23 @@ export const useGridRobotState = (
     }
   };
 
-  const operatorRobotId = viewMode === "operator" ? selectedRobotId : null;
+  const refreshHistoryEvents = useCallback(async () => {
+    if (!sessionToken || viewMode !== "central") {
+      setState((current) => ({ ...current, historyEvents: [], networkEvents: [] }));
+      return;
+    }
+
+    try {
+      const events = await api.getHistoryEvents(sessionToken, { limit: 12 });
+      setState((current) => ({
+        ...current,
+        historyEvents: events,
+        networkEvents: events.filter((entry) => entry.type === "MQTT_MESSAGE_RECEIVED" || entry.type === "ACTUATOR_COMMAND").slice(0, 8)
+      }));
+    } catch (error) {
+      handleSessionError(error);
+    }
+  }, [handleSessionError, sessionToken, viewMode]);
 
   useEffect(() => {
     if (!sessionToken) {
@@ -127,7 +151,11 @@ export const useGridRobotState = (
     return () => {
       active = false;
     };
-  }, [sessionToken, viewMode]);
+  }, [handleSessionError, sessionToken, viewMode]);
+
+  useEffect(() => {
+    void refreshHistoryEvents();
+  }, [refreshHistoryEvents]);
 
   useEffect(() => {
     if (!sessionToken || viewMode !== "operator") {
@@ -151,7 +179,7 @@ export const useGridRobotState = (
       setState((current) => ({
         ...current,
         connectionState: "connected",
-        logs: pushLog(current.logs, "info", "Conexion en tiempo real establecida.")
+        logs: pushLog(current.logs, "info", "Conexión en tiempo real establecida.")
       }));
     };
 
@@ -159,7 +187,7 @@ export const useGridRobotState = (
       setState((current) => ({
         ...current,
         connectionState: "disconnected",
-        logs: pushLog(current.logs, "warn", "Conexion en tiempo real interrumpida.")
+        logs: pushLog(current.logs, "warn", "Conexión en tiempo real interrumpida.")
       }));
     };
 
@@ -192,7 +220,7 @@ export const useGridRobotState = (
     const onRobotUpdated = (robot: RobotState) => {
       const robotMessage =
         robot.status === "OFFLINE" && robot.catalogStatus === "averiado"
-          ? `${robot.name} sufrio una falla y quedo fuera de servicio.`
+          ? `${robot.name} sufrió una falla y quedó fuera de servicio.`
           : `${robot.name} actualizado a ${robot.status}.`;
 
       setState((current) => ({
@@ -207,9 +235,9 @@ export const useGridRobotState = (
     const onTaskUpdated = (task: Task) => {
       const taskMessage =
         task.status === "WAITING_ASSISTANCE"
-          ? `La tarea ${task.name} quedo interrumpida y espera asistencia.`
-          : task.status === "REASSIGNED"
-            ? `La tarea ${task.name} fue reasignada.`
+          ? `La tarea ${task.name} quedó interrumpida y espera asistencia.`
+          : task.status === "ASSIGNED_PENDING_START"
+            ? `La tarea ${task.name} quedó preparada y pendiente de inicio.`
             : `Tarea ${task.name} actualizada.`;
 
       setState((current) => ({
@@ -237,7 +265,7 @@ export const useGridRobotState = (
       setState((current) => ({
         ...current,
         obstacles,
-        logs: pushLog(current.logs, "info", "Mapa de obstaculos actualizado.")
+        logs: pushLog(current.logs, "info", "Mapa de obstáculos actualizado.")
       }));
     };
 
@@ -245,7 +273,7 @@ export const useGridRobotState = (
       setState((current) => ({
         ...current,
         previewRoutes,
-        logs: pushLog(current.logs, "info", "Previsualizacion de rutas actualizada.")
+        logs: pushLog(current.logs, "info", "Previsualización de rutas actualizada.")
       }));
     };
 
@@ -260,6 +288,27 @@ export const useGridRobotState = (
       }));
     };
 
+    const onNetworkStatus = (payload: NetworkStatusSnapshot) => {
+      setState((current) => ({
+        ...current,
+        mqttConnectionState: payload.mqttConnectionState
+      }));
+    };
+
+    const onHistoryEvent = (entry: EventLogEntry) => {
+      setState((current) => ({
+        ...current,
+        historyEvents: [entry, ...current.historyEvents.filter((currentEntry) => currentEntry.id !== entry.id)].slice(0, 12)
+      }));
+    };
+
+    const onNetworkEvent = (entry: EventLogEntry) => {
+      setState((current) => ({
+        ...current,
+        networkEvents: [entry, ...current.networkEvents.filter((currentEntry) => currentEntry.id !== entry.id)].slice(0, 8)
+      }));
+    };
+
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("world:bootstrap", onBootstrap);
@@ -270,6 +319,9 @@ export const useGridRobotState = (
     socket.on("obstacle:list", onObstacleList);
     socket.on("preview:list", onPreviewList);
     socket.on("gateway:error", onError);
+    socket.on("network:status", onNetworkStatus);
+    socket.on("history:event", onHistoryEvent);
+    socket.on("network:event", onNetworkEvent);
 
     socket.connect();
 
@@ -284,6 +336,9 @@ export const useGridRobotState = (
       socket.off("obstacle:list", onObstacleList);
       socket.off("preview:list", onPreviewList);
       socket.off("gateway:error", onError);
+      socket.off("network:status", onNetworkStatus);
+      socket.off("history:event", onHistoryEvent);
+      socket.off("network:event", onNetworkEvent);
       socket.disconnect();
     };
   }, [onSessionInvalid, sessionToken, viewMode]);
@@ -293,6 +348,7 @@ export const useGridRobotState = (
   return {
     ...state,
     visibleRobots,
+    refreshHistoryEvents,
     async assignTask(taskId: string, robotId: string) {
       let task: Task;
       try {
@@ -321,6 +377,11 @@ export const useGridRobotState = (
         task = await api.startTask(taskId, robotId, sessionToken);
       } catch (error) {
         handleSessionError(error);
+        try {
+          await refreshTasks(undefined);
+        } catch {
+          // The session handler already emitted feedback if needed.
+        }
         throw error;
       }
       setState((current) => ({
@@ -348,7 +409,7 @@ export const useGridRobotState = (
         ...current,
         tasks: current.tasks.map((entry) => (entry.id === task.id ? task : entry)),
         previewRoutes: current.previewRoutes.filter((entry) => entry.taskId !== taskId),
-        logs: pushLog(current.logs, "info", `Preparacion cancelada para la tarea ${task.name}.`)
+        logs: pushLog(current.logs, "info", `Preparación cancelada para la tarea ${task.name}.`)
       }));
       socket.emit("world:refresh");
 
@@ -367,7 +428,7 @@ export const useGridRobotState = (
       }
       setState((current) => ({
         ...current,
-        logs: pushLog(current.logs, "warn", `Obstaculo agregado en ${position.x},${position.y}.`)
+        logs: pushLog(current.logs, "warn", `Obstáculo agregado en ${position.x},${position.y}.`)
       }));
     },
     async removeObstacle(position: GridPosition) {
@@ -379,7 +440,7 @@ export const useGridRobotState = (
       }
       setState((current) => ({
         ...current,
-        logs: pushLog(current.logs, "info", `Obstaculo retirado de ${position.x},${position.y}.`)
+        logs: pushLog(current.logs, "info", `Obstáculo retirado de ${position.x},${position.y}.`)
       }));
     }
   };

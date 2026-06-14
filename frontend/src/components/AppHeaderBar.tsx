@@ -18,13 +18,13 @@ export const AppHeaderBar = ({
   return (
     <header className="app-header">
       <div>
-        <p className="eyebrow">Operacion en linea</p>
+        <p className="eyebrow">Operación en línea</p>
         <h2>{title}</h2>
         <p className="app-header__subtitle">{subtitle}</p>
       </div>
 
       <div className="app-header__actions">
-        <span className="header-chip" aria-label="Notificaciones">◌</span>
+        <span className="header-chip" aria-hidden="true">◌</span>
         <button
           type="button"
           className="header-chip theme-toggle"
@@ -36,8 +36,8 @@ export const AppHeaderBar = ({
         </button>
         {sessionLabel ? <span className="header-badge">{sessionLabel}</span> : null}
         {onLogout ? (
-          <button type="button" className="header-button" onClick={onLogout}>
-            Cerrar sesion
+          <button type="button" className="header-button button-danger" onClick={onLogout} aria-label="Cerrar sesión actual">
+            Cerrar sesión
           </button>
         ) : null}
       </div>

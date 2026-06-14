@@ -12,6 +12,12 @@ export default [
       parserOptions: {
         project: "./tsconfig.json",
         tsconfigRootDir: import.meta.dirname
+      },
+      globals: {
+        process: "readonly",
+        NodeJS: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly"
       }
     },
     plugins: {
@@ -19,6 +25,7 @@ export default [
     },
     rules: {
       ...tseslint.configs.recommended.rules,
+      "no-undef": "off",
       "@typescript-eslint/consistent-type-imports": "error",
       "@typescript-eslint/no-misused-promises": ["error", { "checksVoidReturn": false }]
     }

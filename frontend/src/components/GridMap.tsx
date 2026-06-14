@@ -15,6 +15,7 @@ interface GridMapProps {
   selectedRobotId: string | null;
   highlightedTask?: Task | null;
   mode: "central" | "operator";
+  viewerNodeId?: string | null;
   onCellClick?: (position: GridPosition) => void;
   title?: string;
   subtitle?: string;
@@ -31,8 +32,9 @@ export const GridMap = ({
   selectedRobotId,
   highlightedTask = null,
   mode,
+  viewerNodeId = null,
   onCellClick,
-  title = "Mundo de Cuadricula",
+  title = "Mundo de Cuadrícula",
   subtitle,
   showLegendToolbar = true,
   toolbarSuffix
@@ -59,7 +61,8 @@ export const GridMap = ({
         key={key}
         className={`grid-cell${obstacle ? " is-obstacle" : ""}${highlighted ? " is-selected" : ""}${robot ? " has-robot" : ""}${isOrigin ? " is-origin" : ""}${isTarget ? " is-target" : ""}`}
         type="button"
-        title={`Celda ${x}, ${y}${robot ? ` | ${robot.name}` : ""}${obstacle ? " | Obstaculo detectado" : ""}${isOrigin ? " | Inicio de tarea" : ""}${isTarget ? " | Destino de tarea" : ""}`}
+        aria-label={`Celda ${x}, ${y}${robot ? `, robot ${robot.name}` : ""}${obstacle ? ", obstáculo detectado" : ""}${isOrigin ? ", inicio de tarea" : ""}${isTarget ? ", destino de tarea" : ""}`}
+        title={`Celda ${x}, ${y}${robot ? ` | ${robot.name}` : ""}${obstacle ? " | Obstáculo detectado" : ""}${isOrigin ? " | Inicio de tarea" : ""}${isTarget ? " | Destino de tarea" : ""}`}
         onClick={() => onCellClick?.({ x, y })}
         disabled={!onCellClick}
       >
@@ -94,14 +97,16 @@ export const GridMap = ({
             <>
               <span className="legend-item"><span className="legend-swatch legend-swatch--robot" />Robot</span>
               <span className="legend-item"><span className="legend-swatch legend-swatch--route" />Ruta</span>
-              <span className="legend-item"><span className="legend-swatch legend-swatch--obstacle" />Obstaculo visible</span>
+              <span className="legend-item"><span className="legend-swatch legend-swatch--obstacle" />Obstáculo visible</span>
+              <span className="legend-item"><span className="legend-swatch legend-swatch--conflict" />Cruce previo</span>
               <span className="legend-item"><span className="legend-swatch legend-swatch--origin" />Inicio</span>
               <span className="legend-item"><span className="legend-swatch legend-swatch--target" />Destino</span>
             </>
           ) : null}
           <button
             type="button"
-            className="tab"
+            className="tab button-secondary"
+            aria-label={density === "compacta" ? "Cambiar a vista normal de la cuadrícula" : "Cambiar a vista compacta de la cuadrícula"}
             onClick={() => setDensity((current) => (current === "compacta" ? "normal" : "compacta"))}
           >
             Vista {density}
@@ -123,14 +128,16 @@ export const GridMap = ({
             width={width}
             height={height}
             selectedRobotId={selectedRobotId}
+            mode={mode}
+            viewerNodeId={viewerNodeId}
           />
           <ObstacleLayer obstacles={obstacles} width={width} height={height} />
         </div>
       </div>
       <p className="grid-helper">
         {mode === "central"
-          ? "Las coordenadas se muestran al pasar el cursor. Haga clic para agregar o retirar obstaculos visibles. S marca el inicio y D el destino."
-          : "Las coordenadas se muestran al pasar el cursor. Solo aparecen los obstaculos detectados por el robot. S marca el inicio y D el destino."}
+          ? "Las coordenadas se muestran al pasar el cursor. Haga clic sobre un robot para seleccionarlo o sobre una celda libre para consultar su posición. S marca el inicio y D el destino."
+          : "Las coordenadas se muestran al pasar el cursor. Solo aparecen los obstáculos detectados por el robot. S marca el inicio y D el destino."}
       </p>
     </section>
   );

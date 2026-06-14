@@ -1,7 +1,9 @@
 export type RobotStatus = "IDLE" | "MOVING" | "WAITING" | "BLOCKED" | "OFFLINE";
+export type SystemMode = "WAREHOUSE" | "GAME";
 export type TaskStatus =
   | "PENDING"
   | "ASSIGNED"
+  | "ASSIGNED_PENDING_START"
   | "REASSIGNED"
   | "IN_PROGRESS"
   | "WAITING_ASSISTANCE"
@@ -61,6 +63,8 @@ export interface Task {
   targetX: number;
   targetY: number;
   robotId: string | null;
+  assignedNodeId: string | null;
+  assignedOperatorId: string | null;
   loadTypeRequired: "UNIT_LOAD" | "BULK_LOAD";
   requiresRefrigeration: boolean;
   requiresFragileHandling: boolean;
@@ -78,6 +82,8 @@ export interface TaskRobotCandidate {
   robotName: string;
   nodeId: string | null;
   distanceToOrigin: number;
+  capacityLabel: string;
+  supports: RobotSupport[];
   availabilityLabel: string;
   reservationLabel: string | null;
   priorityLabel: string | null;
@@ -91,6 +97,9 @@ export interface PreviewRoute {
   origin: GridPosition;
   target: GridPosition;
   path: GridPosition[];
+  conflictCells: GridPosition[];
+  conflictRobotIds: string[];
+  conflictNodeIds: string[];
   status: "READY" | "INVALID";
   message: string | null;
   updatedAt: string;
@@ -116,6 +125,47 @@ export interface LogEntry {
   message: string;
 }
 
+export type EventType =
+  | "ROBOT_STATE"
+  | "TASK_CREATED"
+  | "TASK_ASSIGNED"
+  | "TASK_STARTED"
+  | "TASK_COMPLETED"
+  | "OBSTACLE_DETECTED"
+  | "OBSTACLE_MOVED"
+  | "MQTT_MESSAGE_RECEIVED"
+  | "ACTUATOR_COMMAND";
+
+export interface EventLogEntry {
+  id: string;
+  type: EventType;
+  source: string;
+  topic: string | null;
+  robotId: string | null;
+  taskId: string | null;
+  payload: unknown;
+  createdAt: string;
+}
+
+export interface RobotTelemetryEntry {
+  id: string;
+  robotId: string;
+  x: number;
+  y: number;
+  status: RobotStatus;
+  speedCellsPerSec: number | null;
+  taskId: string | null;
+  source: string;
+  recordedAt: string;
+  createdAt: string;
+}
+
+export interface NetworkStatusSnapshot {
+  mqttConnectionState: "connected" | "reconnecting" | "disconnected";
+}
+
+export type RobotCommandType = "PAUSE" | "RESUME" | "EMERGENCY_STOP" | "SET_SPEED";
+
 export type ViewMode = "central" | "operator";
 export type AccessRole = "central" | "operator";
 export type OperatorNodeCode = "PC-B01" | "PC-B02" | "PC-B03";
@@ -123,6 +173,8 @@ export type OperatorNodeCode = "PC-B01" | "PC-B02" | "PC-B03";
 export interface AccessSessionRecord {
   role: AccessRole;
   nodeId: OperatorNodeCode | null;
+  operatorId?: string | null;
+  operatorUsername?: string | null;
   token: string | null;
 }
 
@@ -130,6 +182,96 @@ export interface ActiveSessionView {
   socketId: string | null;
   role: AccessRole;
   nodeId: OperatorNodeCode | null;
+  operatorId?: string | null;
+  operatorUsername?: string | null;
   connectedAt: string;
   clientIp: string | null;
+}
+
+export interface Operator {
+  id: string;
+  name: string;
+  username: string;
+  assignedNodeId: OperatorNodeCode | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RobotAdminInput {
+  code: string;
+  name: string;
+  physicalWeightKg: number;
+  speedCellsPerSec: number;
+  capacityValue: number;
+  capacityUnit: CapacityUnit;
+  supports: RobotSupport[];
+  status: "activo" | "inactivo" | "mantenimiento" | "en_espera" | "averiado";
+  isActive: boolean;
+}
+
+export interface OperatorAdminInput {
+  name: string;
+  username: string;
+  password?: string;
+  assignedNodeId: OperatorNodeCode | null;
+  isActive: boolean;
+}
+
+export type GameStatus = "IDLE" | "RUNNING" | "PAUSED" | "FINISHED";
+export type GameDirection = "UP" | "DOWN" | "LEFT" | "RIGHT";
+export type GameCollectibleType = "POINT" | "BONUS" | "LIFE";
+
+export interface GamePlayer {
+  id: string;
+  name: string;
+  robotId?: string;
+  color: string;
+  position: GridPosition;
+  direction: GameDirection;
+  nextDirection?: GameDirection;
+  score: number;
+  lives: number;
+  alive: boolean;
+  connected: boolean;
+  invulnerableUntil?: number;
+  joinedAt: string;
+}
+
+export interface GameCollectible {
+  id: string;
+  type: GameCollectibleType;
+  position: GridPosition;
+  value: number;
+}
+
+export interface GameObstacle {
+  id: string;
+  position: GridPosition;
+}
+
+export interface GameLeaderboardItem {
+  playerId: string;
+  name: string;
+  color: string;
+  score: number;
+  lives: number;
+  alive: boolean;
+  connected: boolean;
+  joinedAt: string;
+  statusLabel: "Vivo" | "Eliminado" | "Desconectado";
+}
+
+export interface GameStateSnapshot {
+  status: GameStatus;
+  grid: {
+    width: number;
+    height: number;
+    tickRateHz: number;
+  };
+  players: GamePlayer[];
+  collectibles: GameCollectible[];
+  obstacles: GameObstacle[];
+  leaderboard: GameLeaderboardItem[];
+  tick: number;
 }

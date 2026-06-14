@@ -3,7 +3,8 @@ import type { MqttClient } from "mqtt";
 
 import { MQTT_TOPICS } from "../../config/constants.js";
 import type { GridPosition } from "../../shared/types.js";
-import { GridManager } from "../grid/grid-manager.js";
+import type { EventLogService } from "../events/event-log-service.js";
+import type { GridManager } from "../grid/grid-manager.js";
 
 interface ObstacleState {
   id: string;
@@ -18,6 +19,7 @@ export class ObstacleManager {
   public constructor(
     private readonly gridManager: GridManager,
     private readonly prisma: PrismaClient,
+    private readonly eventLogService?: EventLogService,
     private readonly mqttClient?: MqttClient
   ) {}
 
@@ -137,6 +139,18 @@ export class ObstacleManager {
       type: persisted.type,
       source: persisted.source
     });
+    await this.eventLogService?.record({
+      type: "OBSTACLE_DETECTED",
+      source: "obstacle-manager",
+      topic: MQTT_TOPICS.obstacles,
+      payload: {
+        obstacleId: persisted.id,
+        x: position.x,
+        y: position.y,
+        type: persisted.type,
+        source: persisted.source
+      }
+    });
     this.publish();
     return this.getAll();
   }
@@ -193,26 +207,63 @@ export class ObstacleManager {
         continue;
       }
 
+      const conflictingPersistedObstacle = await this.prisma.obstacle.findFirst({
+        where: {
+          id: { not: obstacle.id },
+          x: nextPosition.x,
+          y: nextPosition.y
+        },
+        select: {
+          id: true,
+          isActive: true
+        }
+      });
+
+      if (conflictingPersistedObstacle) {
+        continue;
+      }
+
+      try {
+        await this.prisma.obstacle.update({
+          where: { id: obstacle.id },
+          data: {
+            x: nextPosition.x,
+            y: nextPosition.y,
+            source: "SIMULATION",
+            detectedAt: new Date(),
+            clearedAt: null
+          }
+        });
+      } catch {
+        continue;
+      }
+
       this.obstacles.delete(previousKey);
       this.obstacles.set(nextKey, {
         ...obstacle,
         position: nextPosition
       });
 
-      await this.prisma.obstacle.update({
-        where: { id: obstacle.id },
-        data: {
-          x: nextPosition.x,
-          y: nextPosition.y,
-          source: "SIMULATION",
-          detectedAt: new Date(),
-          clearedAt: null
-        }
-      });
-
       moved.push({
         from: obstacle.position,
         to: nextPosition
+      });
+
+      await this.eventLogService?.record({
+        type: "OBSTACLE_MOVED",
+        source: "obstacle-manager",
+        topic: MQTT_TOPICS.obstacles,
+        payload: {
+          obstacleId: obstacle.id,
+          from: {
+            x: obstacle.position.x,
+            y: obstacle.position.y
+          },
+          to: {
+            x: nextPosition.x,
+            y: nextPosition.y
+          }
+        }
       });
     }
 

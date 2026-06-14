@@ -23,11 +23,11 @@ export const CentralAccessPanel = ({
         <div>
           <p className="eyebrow">Panel Central</p>
           <h1>Acceso restringido a la computadora central</h1>
-          <p className="hero__lede">Validacion segura para la consola maestra del sistema GRIDROBOT.</p>
+          <p className="hero__lede">Validación segura para la consola maestra del sistema GRIDROBOT.</p>
         </div>
         <div className="metric-strip">
           <article className="metric-card">
-            <span className="metric-card__label">Supervision</span>
+            <span className="metric-card__label">Supervisión</span>
             <strong>Protegida</strong>
           </article>
           <article className="metric-card">
@@ -58,6 +58,7 @@ export const CentralAccessPanel = ({
               onChange={(event) => setPassword(event.target.value)}
               placeholder="Ingrese la contraseña"
               autoComplete="current-password"
+              aria-label="Contraseña del panel central"
             />
           </label>
 
@@ -65,10 +66,10 @@ export const CentralAccessPanel = ({
           {errorMessage ? <p className="form-message form-message--error">{errorMessage}</p> : null}
 
           <div className="access-actions">
-            <button type="button" className="tab" onClick={onBack}>
+            <button type="button" className="tab button-secondary" onClick={onBack}>
               Volver
             </button>
-            <button type="submit" className="claim-button" disabled={isSubmitting || password.trim().length === 0}>
+            <button type="submit" className="claim-button button-primary" disabled={isSubmitting || password.trim().length === 0}>
               {isSubmitting ? "Validando acceso..." : "Entrar al Panel Central"}
             </button>
           </div>

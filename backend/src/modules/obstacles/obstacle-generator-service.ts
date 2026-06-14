@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 import type { GridPosition } from "../../shared/types.js";
-import { GridManager } from "../grid/grid-manager.js";
+import type { GridManager } from "../grid/grid-manager.js";
 
 class SeededRandom {
   private state: number;

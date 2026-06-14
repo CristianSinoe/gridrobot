@@ -53,6 +53,7 @@ services:
       ALLOWED_ORIGINS: http://localhost:${FRONTEND_PORT:-5173},http://127.0.0.1:${FRONTEND_PORT:-5173},http://${PUBLIC_HOST_IP:-192.168.100.12}:${FRONTEND_PORT:-5173}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-gridrobot}?schema=public
       MQTT_URL: mqtt://mqtt:1883
+      MQTT_INTERNAL_SIMULATOR_ENABLED: ${MQTT_INTERNAL_SIMULATOR_ENABLED:-true}
       TICK_RATE_HZ: ${GRIDROBOT_TICK_RATE_HZ:-20}
     command: >
       sh -c "npm install &&
@@ -61,6 +62,30 @@ services:
       npm run dev"
     ports:
       - "${BACKEND_PORT:-4000}:4000"
+    volumes:
+      - ./backend:/app/backend
+      - ./database:/app/database
+      - ./packages:/app/packages
+      - backend_node_modules:/app/backend/node_modules
+    networks:
+      - gridrobot
+
+  mqtt-emulator:
+    profiles: ["mqtt-emulator"]
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: gridrobot-mqtt-emulator
+    restart: unless-stopped
+    depends_on:
+      mqtt:
+        condition: service_started
+    working_dir: /app/backend
+    environment:
+      MQTT_URL: mqtt://mqtt:1883
+    command: >
+      sh -c "npm install &&
+      npm run emulator:mqtt"
     volumes:
       - ./backend:/app/backend
       - ./database:/app/database

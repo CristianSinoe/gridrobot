@@ -1,8 +1,10 @@
 import { io } from "socket.io-client";
 
-import { SOCKET_URL } from "../config";
+import { SOCKET_PATH, SOCKET_URL } from "../config";
 
 export const socket = io(SOCKET_URL, {
   autoConnect: false,
-  transports: ["websocket"]
+  path: SOCKET_PATH,
+  transports: ["websocket", "polling"],
+  upgrade: true
 });

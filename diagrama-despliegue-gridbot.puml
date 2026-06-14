@@ -1,0 +1,85 @@
+@startuml
+title Diagrama de Despliegue - GRIDBOT
+
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam defaultTextAlignment center
+skinparam nodesep 45
+skinparam ranksep 40
+
+node "Red local / LAN" as lan {
+  node "PC-A01\nEstacion central" as pc_central {
+    artifact "Navegador web\nPanel central" as browser_central
+  }
+
+  node "PC-B01\nEstacion operador" as pc_b01 {
+    artifact "Navegador web\nOperador B01" as browser_b01
+  }
+
+  node "PC-B02\nEstacion operador" as pc_b02 {
+    artifact "Navegador web\nOperador B02" as browser_b02
+  }
+
+  node "PC-B03\nEstacion operador" as pc_b03 {
+    artifact "Navegador web\nOperador B03" as browser_b03
+  }
+
+  node "Host GRIDBOT\nDocker Compose" as host {
+    frame "network: gridrobot" as compose_net {
+      node "Contenedor frontend" as frontend_container {
+        artifact "SPA React + Vite\nPuerto 5173" as frontend_app
+      }
+
+      node "Contenedor backend" as backend_container {
+        artifact "Node.js + Express + Socket.IO\nScheduler + simulacion\nPuerto 4000" as backend_app
+      }
+
+      database "PostgreSQL 16\nPuerto 5432" as postgres
+      node "Eclipse Mosquitto\nMQTT Broker\nPuertos 1883 / 9001" as mqtt
+    }
+
+    folder "Volumenes Docker" as volumes {
+      artifact "postgres_data" as vol_postgres
+      artifact "mosquitto_data" as vol_mqtt_data
+      artifact "mosquitto_log" as vol_mqtt_log
+      artifact "backend_node_modules" as vol_backend_nm
+      artifact "frontend_node_modules" as vol_frontend_nm
+    }
+  }
+}
+
+browser_central --> frontend_app : HTTP\ncarga SPA
+browser_b01 --> frontend_app : HTTP\ncarga SPA
+browser_b02 --> frontend_app : HTTP\ncarga SPA
+browser_b03 --> frontend_app : HTTP\ncarga SPA
+
+browser_central --> backend_app : REST + Socket.IO/WebSocket
+browser_b01 --> backend_app : REST + Socket.IO/WebSocket
+browser_b02 --> backend_app : REST + Socket.IO/WebSocket
+browser_b03 --> backend_app : REST + Socket.IO/WebSocket
+
+frontend_app --> backend_app : llamadas API\nsegun hostname del navegador
+backend_app --> postgres : Prisma / PostgreSQL
+backend_app --> mqtt : MQTT publish
+
+postgres -- vol_postgres
+mqtt -- vol_mqtt_data
+mqtt -- vol_mqtt_log
+backend_container -- vol_backend_nm
+frontend_container -- vol_frontend_nm
+
+note right of backend_app
+Backend autoritativo del sistema.
+Gestiona sesiones, tareas, rutas,
+obstaculos, visibilidad y simulacion por ticks.
+end note
+
+note left of browser_central
+Una sesion central simultanea.
+end note
+
+note left of browser_b01
+Una sesion por nodo operador.
+end note
+
+@enduml

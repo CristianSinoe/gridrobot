@@ -2,10 +2,10 @@ import type { PrismaClient, Task } from "@prisma/client";
 
 import { badRequest, notFound } from "../../shared/errors.js";
 import type { GridPosition, TaskRobotCandidateView, TaskView } from "../../shared/types.js";
-import { GridManager } from "../grid/grid-manager.js";
-import { ObstacleManager } from "../obstacles/obstacle-manager.js";
-import { RobotService } from "../robots/robot-service.js";
-import { FIXED_RUNTIME_ASSIGNMENTS } from "../robots/robot-catalog.js";
+import type { EventLogService } from "../events/event-log-service.js";
+import type { GridManager } from "../grid/grid-manager.js";
+import type { ObstacleManager } from "../obstacles/obstacle-manager.js";
+import type { RobotService } from "../robots/robot-service.js";
 import { TaskCompatibilityService } from "./task-compatibility-service.js";
 import { TaskGeneratorService } from "./task-generator-service.js";
 
@@ -18,7 +18,8 @@ export class TaskService {
     private readonly prisma: PrismaClient,
     private readonly robotService: RobotService,
     private readonly gridManager: GridManager,
-    private readonly obstacleManager: ObstacleManager
+    private readonly obstacleManager: ObstacleManager,
+    private readonly eventLogService: EventLogService
   ) {
     this.taskGeneratorService = new TaskGeneratorService(prisma, gridManager, 20260317);
   }
@@ -60,6 +61,8 @@ export class TaskService {
     target: GridPosition;
     robotId?: string;
   }): Promise<TaskView> {
+    this.assertValidTaskCoordinates({ x: 0, y: 0 }, input.target);
+
     const task = await this.prisma.task.create({
       data: {
         code: `MANUAL-${Date.now()}`,
@@ -78,10 +81,31 @@ export class TaskService {
       }
     });
 
+    await this.eventLogService.record({
+      type: "TASK_CREATED",
+      source: "task-service",
+      taskId: task.id,
+      robotId: task.robotId,
+      topic: "gridbot/tasks/events",
+      payload: {
+        code: task.code,
+        name: task.name,
+        originX: task.originX,
+        originY: task.originY,
+        targetX: task.targetX,
+        targetY: task.targetY
+      }
+    });
+
     return this.toTaskView(task);
   }
 
-  public async assign(taskId: string, robotId: string, assignedByNodeCode?: string | null): Promise<TaskView> {
+  public async assign(
+    taskId: string,
+    robotId: string,
+    assignedByNodeCode?: string | null,
+    assignedOperatorId?: string | null
+  ): Promise<TaskView> {
     const [task, robot] = await Promise.all([
       this.prisma.task.findUnique({ where: { id: taskId } }),
       this.prisma.robot.findUnique({ where: { id: robotId } })
@@ -95,7 +119,7 @@ export class TaskService {
       throw notFound(`No se encontro el robot ${robotId}.`);
     }
 
-    if (task.status !== "PENDING" && task.status !== "WAITING_ASSISTANCE") {
+    if (task.status !== "PENDING") {
       throw badRequest("Esta tarea ya no esta disponible.");
     }
 
@@ -118,10 +142,11 @@ export class TaskService {
       const existingPreparedTask = await this.prisma.task.findFirst({
         where: {
           id: { not: taskId },
-          status: { in: ["ASSIGNED", "REASSIGNED"] },
+          status: { in: ["ASSIGNED_PENDING_START"] },
           assignments: {
             some: {
-              assignedByNodeId: assignedByNode.id
+              assignedByNodeId: assignedByNode.id,
+              ...(assignedOperatorId ? { assignedOperatorId } : {})
             }
           }
         }
@@ -137,7 +162,7 @@ export class TaskService {
         where: { id: taskId }
       });
 
-      if (!lockedTask || !["PENDING", "WAITING_ASSISTANCE"].includes(lockedTask.status)) {
+      if (!lockedTask || lockedTask.status !== "PENDING") {
         throw badRequest("Esta tarea ya fue tomada por otro operador.");
       }
 
@@ -145,7 +170,7 @@ export class TaskService {
         where: {
           id: { not: taskId },
           robotId,
-          status: { in: ["ASSIGNED", "REASSIGNED", "IN_PROGRESS"] }
+          status: { in: ["ASSIGNED_PENDING_START", "IN_PROGRESS"] }
         },
         include: {
           assignments: {
@@ -168,7 +193,7 @@ export class TaskService {
         where: { id: taskId },
         data: {
           robotId,
-          status: lockedTask.status === "WAITING_ASSISTANCE" ? "REASSIGNED" : "ASSIGNED"
+          status: "ASSIGNED_PENDING_START"
         }
       });
 
@@ -183,10 +208,12 @@ export class TaskService {
           taskId,
           robotId,
           assignedByNodeId: assignedByNode?.id ?? null,
+          assignedOperatorId: assignedOperatorId ?? null,
           acceptedAt: new Date()
         },
         update: {
           assignedByNodeId: assignedByNode?.id ?? null,
+          assignedOperatorId: assignedOperatorId ?? null,
           acceptedAt: new Date(),
           startedAt: null,
           completedAt: null
@@ -195,6 +222,20 @@ export class TaskService {
     });
 
     const assignedTask = await this.prisma.task.findUniqueOrThrow({ where: { id: taskId } });
+    await this.eventLogService.record({
+      type: "TASK_ASSIGNED",
+      source: "task-service",
+      taskId,
+      robotId,
+      topic: "gridbot/tasks/events",
+      payload: {
+        taskId,
+        robotId,
+        assignedByNodeCode: assignedByNodeCode ?? null,
+        assignedOperatorId: assignedOperatorId ?? null,
+        status: assignedTask.status
+      }
+    });
     return this.toTaskView(assignedTask);
   }
 
@@ -213,15 +254,27 @@ export class TaskService {
     }
 
     if (task.robotId !== robotId) {
+      if (!task.robotId) {
+        throw badRequest("No se puede iniciar la tarea sin un robot asignado.");
+      }
       throw badRequest("La tarea no esta tomada por este robot.");
     }
 
-    if (task.status !== "ASSIGNED" && task.status !== "REASSIGNED") {
+    if (task.status !== "ASSIGNED_PENDING_START") {
+      if (task.status === "PENDING" && !task.robotId) {
+        throw badRequest("La tarea fue liberada y ya no tiene un robot asignado. Seleccione un robot de nuevo.");
+      }
+
       throw badRequest("Solo las tareas tomadas pueden iniciar viaje.");
     }
 
     if (!robot.isActive || robot.status === "OFFLINE" || robot.catalogStatus === "mantenimiento") {
       throw badRequest("El robot seleccionado ya no esta disponible para iniciar el viaje.");
+    }
+
+    const runtimeRobot = this.robotService.getById(robotId);
+    if (runtimeRobot.taskId && runtimeRobot.taskId !== taskId) {
+      throw badRequest("El robot seleccionado ya está ocupado.");
     }
 
     const nextExecutionStage =
@@ -257,6 +310,19 @@ export class TaskService {
     await this.robotService.assignRoute(robotId, target, taskId, "TASK_START");
 
     const startedTask = await this.prisma.task.findUniqueOrThrow({ where: { id: taskId } });
+    await this.eventLogService.record({
+      type: "TASK_STARTED",
+      source: "task-service",
+      taskId,
+      robotId,
+      topic: "gridbot/tasks/events",
+      payload: {
+        taskId,
+        robotId,
+        executionStage: startedTask.executionStage,
+        status: startedTask.status
+      }
+    });
     return this.toTaskView(startedTask);
   }
 
@@ -269,7 +335,7 @@ export class TaskService {
       throw notFound(`No se encontro la tarea ${taskId}.`);
     }
 
-    if (task.status !== "ASSIGNED" && task.status !== "REASSIGNED") {
+    if (task.status !== "ASSIGNED_PENDING_START") {
       throw badRequest("Solo se pueden cancelar viajes preparados que aun no inician.");
     }
 
@@ -298,7 +364,7 @@ export class TaskService {
         where: { id: taskId },
         data: {
           robotId: null,
-          status: task.status === "REASSIGNED" ? "WAITING_ASSISTANCE" : "PENDING"
+          status: "PENDING"
         }
       });
 
@@ -316,6 +382,97 @@ export class TaskService {
     });
 
     const updatedTask = await this.prisma.task.findUniqueOrThrow({ where: { id: taskId } });
+    return this.toTaskView(updatedTask);
+  }
+
+  public async releaseByAdminPause(robotId: string): Promise<TaskView | null> {
+    const robotState = this.robotService.getById(robotId);
+    if (!robotState.taskId) {
+      return null;
+    }
+
+    const task = await this.prisma.task.findUnique({
+      where: { id: robotState.taskId }
+    });
+
+    if (!task) {
+      await this.robotService.clearTaskControl(robotId);
+      return null;
+    }
+
+    if (task.status === "ASSIGNED_PENDING_START") {
+      const releasedTask = await this.cancelPreparation(task.id);
+      await this.robotService.clearTaskControl(robotId);
+      return releasedTask;
+    }
+
+    if (task.status !== "IN_PROGRESS") {
+      await this.robotService.clearTaskControl(robotId);
+      return this.toTaskView(task);
+    }
+
+    const resumeOrigin =
+      task.executionStage === "TO_TARGET"
+        ? { x: robotState.position.x, y: robotState.position.y }
+        : { x: task.originX, y: task.originY };
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.task.update({
+        where: { id: task.id },
+        data: {
+          status: "PENDING",
+          robotId: null,
+          originX: resumeOrigin.x,
+          originY: resumeOrigin.y
+        }
+      });
+
+      await tx.taskAssignment.updateMany({
+        where: {
+          taskId: task.id,
+          robotId
+        },
+        data: {
+          completedAt: new Date()
+        }
+      });
+
+      await tx.systemLog.create({
+        data: {
+          level: "WARN",
+          source: "panel-central",
+          robotId,
+          taskId: task.id,
+          message: "El Panel Central pausó el robot y liberó la tarea para reasignación."
+        }
+      });
+    });
+
+    await this.robotService.clearTaskControl(robotId);
+
+    const updatedTask = await this.prisma.task.findUniqueOrThrow({
+      where: { id: task.id }
+    });
+
+    await this.eventLogService.record({
+      type: "ROBOT_STATE",
+      source: "task-service",
+      taskId: task.id,
+      robotId,
+      topic: "gridbot/tasks/events",
+      payload: {
+        action: "ADMIN_PAUSE_RELEASE",
+        taskId: task.id,
+        robotId,
+        status: updatedTask.status,
+        executionStage: updatedTask.executionStage,
+        origin: {
+          x: updatedTask.originX,
+          y: updatedTask.originY
+        }
+      }
+    });
+
     return this.toTaskView(updatedTask);
   }
 
@@ -382,11 +539,12 @@ export class TaskService {
       }
 
       if (task.executionStage === "TO_TARGET" && atTarget) {
+        const completedAt = new Date();
         await this.prisma.task.update({
           where: { id: task.id },
           data: {
             status: "COMPLETED",
-            completedAt: new Date()
+            completedAt
           }
         });
 
@@ -396,7 +554,7 @@ export class TaskService {
             robotId: robot.id
           },
           data: {
-            completedAt: new Date()
+            completedAt
           }
         });
 
@@ -408,47 +566,51 @@ export class TaskService {
           status: "IDLE",
           updatedAt: new Date().toISOString()
         });
+
+        await this.eventLogService.record({
+          type: "TASK_COMPLETED",
+          source: "task-service",
+          taskId: task.id,
+          robotId: robot.id,
+          topic: "gridbot/tasks/events",
+          payload: {
+            taskId: task.id,
+            robotId: robot.id,
+            completedAt: completedAt.toISOString()
+          }
+        });
       }
     }
   }
 
   public async ensureAutomaticTasks(): Promise<TaskView[]> {
-    const activeRobotCodes = new Set(FIXED_RUNTIME_ASSIGNMENTS.map((entry) => entry.robotCode));
     const robots = await this.prisma.robot.findMany({
       where: {
-        code: { in: Array.from(activeRobotCodes) }
+        isActive: true,
+        status: { not: "OFFLINE" }
       },
       orderBy: { code: "asc" }
     });
 
-    const reservedPositions = [
+    const reservedPositions: GridPosition[] = [
       ...robots.map((robot) => ({ x: robot.x, y: robot.y })),
       ...this.obstacleManager.getAll()
     ];
 
-    for (const robot of robots) {
-      const openTasks = await this.prisma.task.findMany({
-        where: {
-          status: { in: ["PENDING", "ASSIGNED", "REASSIGNED", "IN_PROGRESS", "WAITING_ASSISTANCE"] }
-        }
-      });
-
-      const hasCompatibleOpenTask = openTasks.some(
-        (task) =>
-          task.robotId === robot.id ||
-          (
-            (task.status === "PENDING" || task.status === "WAITING_ASSISTANCE") &&
-            this.compatibilityService.isRobotCompatible(robot, task)
-          )
-      );
-
-      if (!hasCompatibleOpenTask) {
-        const task = await this.taskGeneratorService.createCompatibleTaskForRobot(robot, reservedPositions);
-        reservedPositions.push(
-          { x: task.originX, y: task.originY },
-          { x: task.targetX, y: task.targetY }
-        );
+    const tasksInPool = await this.prisma.task.count({
+      where: {
+        status: { in: ["PENDING", "ASSIGNED_PENDING_START"] }
       }
+    });
+
+    const tasksToCreate = Math.max(0, 10 - tasksInPool);
+
+    for (let index = 0; index < tasksToCreate; index += 1) {
+      const task = await this.taskGeneratorService.createAutomaticTask(reservedPositions);
+      reservedPositions.push(
+        { x: task.originX, y: task.originY },
+        { x: task.targetX, y: task.targetY }
+      );
     }
 
     return this.list();
@@ -554,6 +716,7 @@ export class TaskService {
 
   private async toTaskView(task: Task): Promise<TaskView> {
     const recommendedRobots = await this.rankRobotsForTask(task);
+    const assignmentMeta = await this.getTaskAssignmentMeta(task.id, task.robotId);
 
     return {
       id: task.id,
@@ -565,6 +728,8 @@ export class TaskService {
       origin: { x: task.originX, y: task.originY },
       target: { x: task.targetX, y: task.targetY },
       robotId: task.robotId,
+      assignedNodeId: assignmentMeta?.assignedNodeId ?? null,
+      assignedOperatorId: assignmentMeta?.assignedOperatorId ?? null,
       loadTypeRequired: task.loadTypeRequired === "BULK_LOAD" ? "BULK_LOAD" : "UNIT_LOAD",
       requiresRefrigeration: task.requiresRefrigeration,
       requiresFragileHandling: task.requiresFragileHandling,
@@ -617,12 +782,14 @@ export class TaskService {
           robotName: robot.name ?? robot.code,
           nodeId: runtimeRobot?.assignedNodeCode ?? null,
           distanceToOrigin,
+          capacityLabel: `${robot.capacityValue ?? 0} ${robot.capacityUnit ?? ""}`.trim(),
+          supports: robot.supports as TaskRobotCandidateView["supports"],
           availabilityLabel: available ? "Disponible" : reservationLabel ?? "No disponible",
           reservationLabel,
           priorityLabel: null,
           isAvailable: available,
           availabilityRank: available ? 0 : 1,
-          speedRank: -(robot.speedCellsPerSec ?? 0)
+          capacityRank: -(robot.capacityValue ?? 0)
         };
       })
       .sort((left, right) => {
@@ -634,18 +801,24 @@ export class TaskService {
           return left.distanceToOrigin - right.distanceToOrigin;
         }
 
-        return left.speedRank - right.speedRank;
+        return left.capacityRank - right.capacityRank;
       });
 
-    return ranked.map(({ availabilityRank, speedRank, ...candidate }, index) => ({
-      ...candidate,
-      priorityLabel:
-        index === 0 && candidate.isAvailable
-          ? "Mejor opcion"
-          : candidate.isAvailable && candidate.distanceToOrigin === ranked[0]?.distanceToOrigin
-            ? "Mas cercano"
-            : null
-    }));
+    return ranked.map((entry, index) => {
+      const { availabilityRank, capacityRank, ...candidate } = entry;
+      void availabilityRank;
+      void capacityRank;
+
+      return {
+        ...candidate,
+        priorityLabel:
+          index === 0 && candidate.isAvailable
+            ? "Mejor opcion"
+            : candidate.isAvailable && candidate.distanceToOrigin === ranked[0]?.distanceToOrigin
+              ? "Mas cercano"
+              : null
+      };
+    });
   }
 
   private async listReservedRobotTasks(excludedTaskId?: string) {
@@ -653,7 +826,7 @@ export class TaskService {
       where: {
         ...(excludedTaskId ? { id: { not: excludedTaskId } } : {}),
         robotId: { not: null },
-        status: { in: ["ASSIGNED", "REASSIGNED", "IN_PROGRESS"] }
+        status: { in: ["ASSIGNED_PENDING_START", "IN_PROGRESS"] }
       },
       include: {
         assignments: {
@@ -686,6 +859,35 @@ export class TaskService {
     return operatorCode ? `Reservado por ${operatorCode}` : "Reservado por otro operador";
   }
 
+  private async getTaskAssignmentMeta(taskId: string, robotId: string | null) {
+    if (!robotId) {
+      return null;
+    }
+
+    const assignment = await this.prisma.taskAssignment.findFirst({
+      where: {
+        taskId,
+        robotId
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        assignedByNode: {
+          select: { code: true }
+        },
+        assignedOperator: {
+          select: { id: true }
+        }
+      }
+    });
+
+    return assignment
+      ? {
+          assignedNodeId: assignment.assignedByNode?.code ?? null,
+          assignedOperatorId: assignment.assignedOperator?.id ?? null
+        }
+      : null;
+  }
+
   private getRobotReservationMessage(
     robotCode: string,
     task: {
@@ -703,5 +905,15 @@ export class TaskService {
     return operatorCode
       ? `El robot ${robotCode} ya esta reservado por ${operatorCode} para la tarea ${taskCode}.`
       : `El robot ${robotCode} ya esta reservado para la tarea ${taskCode}.`;
+  }
+
+  private assertValidTaskCoordinates(origin: GridPosition, target: GridPosition): void {
+    if (!this.gridManager.isWithinBounds(origin) || !this.gridManager.isWithinBounds(target)) {
+      throw badRequest("La posición indicada está fuera del mapa.");
+    }
+
+    if (this.obstacleManager.isBlocked(origin) || this.obstacleManager.isBlocked(target)) {
+      throw badRequest("La posición indicada está bloqueada por un obstáculo.");
+    }
   }
 }

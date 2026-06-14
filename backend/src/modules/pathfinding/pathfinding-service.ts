@@ -1,7 +1,7 @@
 import { badRequest } from "../../shared/errors.js";
 import type { GridPosition } from "../../shared/types.js";
-import { GridManager } from "../grid/grid-manager.js";
-import { ObstacleManager } from "../obstacles/obstacle-manager.js";
+import type { GridManager } from "../grid/grid-manager.js";
+import type { ObstacleManager } from "../obstacles/obstacle-manager.js";
 
 interface QueueNode {
   position: GridPosition;

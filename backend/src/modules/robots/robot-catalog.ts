@@ -18,6 +18,9 @@ export interface RobotCatalogEntry {
   isActive: boolean;
 }
 
+export const OPERATOR_NODE_CODES = ["PC-B01", "PC-B02", "PC-B03"] as const;
+export type OperatorNodeCode = typeof OPERATOR_NODE_CODES[number];
+
 export const ROBOT_CATALOG: RobotCatalogEntry[] = [
   {
     code: "R01",
@@ -241,8 +244,8 @@ export const ROBOT_CATALOG: RobotCatalogEntry[] = [
   }
 ];
 
-export const FIXED_RUNTIME_ASSIGNMENTS = [
+export const FIXED_RUNTIME_ASSIGNMENTS: Array<{ nodeCode: OperatorNodeCode; robotCode: string }> = [
   { nodeCode: "PC-B01", robotCode: "R03" },
   { nodeCode: "PC-B02", robotCode: "R11" },
   { nodeCode: "PC-B03", robotCode: "R16" }
-] as const;
+];

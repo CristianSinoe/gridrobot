@@ -1,0 +1,89 @@
+@startuml
+title GRIDBOT - Diagrama Conceptual
+left to right direction
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam defaultFontName Arial
+
+actor Administrador
+actor Operador
+
+rectangle "Frontend" {
+  component "Panel Administrador\nReact + Vite" as AdminUI
+  component "Panel Operador\nReact + Vite" as OperatorUI
+}
+
+rectangle "Capa de Aplicación" {
+  component "Backend GRIDBOT\nNode.js + Express" as Backend
+  component "API REST" as Api
+  component "Socket.IO" as Socket
+}
+
+rectangle "Comunicación MQTT" {
+  component "Broker MQTT\nMosquitto" as Broker
+  component "Emulador MQTT Externo" as Emulator
+}
+
+rectangle "Persistencia" {
+  database "PostgreSQL\nPrisma ORM" as Database
+}
+
+cloud "Docker / Demo LAN" as DemoLan
+
+Administrador --> AdminUI : Usa panel central
+Operador --> OperatorUI : Usa panel operativo
+
+AdminUI --> Api : Solicitudes HTTP REST
+OperatorUI --> Api : Solicitudes HTTP REST
+
+AdminUI --> Socket : Eventos y actualizaciones
+OperatorUI --> Socket : Eventos y actualizaciones
+
+Api --> Backend : Controladores y lógica
+Socket --> Backend : Tiempo real bidireccional
+
+Backend --> Database : Lee / escribe datos
+Backend --> Broker : Publica y se suscribe
+
+Broker --> Emulator : Comandos MQTT
+Emulator --> Broker : Status / Telemetry
+
+Broker --> Backend : Mensajes MQTT
+Backend --> Socket : Estado en tiempo real
+
+DemoLan --- AdminUI
+DemoLan --- OperatorUI
+DemoLan --- Backend
+DemoLan --- Broker
+DemoLan --- Database
+DemoLan --- Emulator
+
+note bottom of Backend
+Centraliza la lógica del sistema:
+- robots
+- tareas
+- operadores
+- rutas
+- validaciones
+- histórico
+end note
+
+note right of Broker
+Canales principales:
+- gridbot/robots/{robotId}/commands
+- gridbot/robots/{robotId}/status
+- gridbot/robots/{robotId}/telemetry
+- gridbot/tasks/events
+end note
+
+note bottom of Database
+Persistencia de:
+- tareas
+- robots
+- operadores
+- eventos históricos
+- telemetría
+end note
+
+@enduml

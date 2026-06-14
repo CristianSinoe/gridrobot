@@ -1,12 +1,10 @@
-FROM node:22-alpine
+FROM node:22-bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-
-COPY package*.json ./
-COPY backend/package*.json ./backend/
-
 WORKDIR /app/backend
-
-RUN npm install
 
 CMD ["npm", "run", "dev"]

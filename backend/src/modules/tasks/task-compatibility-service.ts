@@ -32,6 +32,11 @@ export class TaskCompatibilityService {
       return false;
     }
 
-    return robot.isActive && robot.catalogStatus !== "mantenimiento";
+    return (
+      robot.isActive &&
+      robot.catalogStatus !== "mantenimiento" &&
+      robot.status !== "OFFLINE" &&
+      robot.status !== "BLOCKED"
+    );
   }
 }
